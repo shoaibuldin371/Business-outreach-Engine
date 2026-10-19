@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getLeadById, updateLead, insertLog, recordSentEmail } from '@/lib/server/supabase';
-import { sendEmail } from '@/lib/server/email';
+import { sendEmail, verifyDomainHasMx } from '@/lib/server/email';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,6 +21,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
     if (!subject || !emailBody) {
       return NextResponse.json({ error: 'Subject and body are required.' }, { status: 400 });
+    }
+
+    // Pre-flight MX check to avoid bouncing
+    const hasMx = await verifyDomainHasMx(recipient);
+    if (!hasMx) {
+      const domain = recipient.split('@')[1] || recipient;
+      return NextResponse.json({
+        error: `Cannot send: The recipient domain '${domain}' has no active mail server (MX record). Message blocked to prevent delivery failure bounce.`
+      }, { status: 400 });
     }
 
     await insertLog(

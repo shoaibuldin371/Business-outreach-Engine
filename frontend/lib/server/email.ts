@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import dns from 'dns/promises';
 import {
   insertLog,
   recordSentEmail,
@@ -7,6 +8,27 @@ import {
   BusinessLead,
 } from './supabase';
 import { sendEmailViaGmailApi, getValidGmailAccessToken } from './gmail-oauth';
+
+/**
+ * Checks if a domain has active MX mail records on the internet
+ * Prevents "Address not found" bounce emails
+ */
+export async function verifyDomainHasMx(email: string): Promise<boolean> {
+  try {
+    const domain = email.includes('@') ? email.split('@')[1].trim().toLowerCase() : email.trim().toLowerCase();
+    if (!domain || !domain.includes('.')) return false;
+
+    // Reject obvious dummy domains
+    if (domain.endsWith('.local') || domain.endsWith('.invalid') || domain.endsWith('.example')) {
+      return false;
+    }
+
+    const records = await dns.resolveMx(domain);
+    return Array.isArray(records) && records.length > 0;
+  } catch (e) {
+    return false;
+  }
+}
 
 function getSmtpTransporter() {
   const host = process.env.SMTP_HOST;
@@ -230,6 +252,23 @@ export async function sendPitchToProspect(
       lead.id
     );
     return { success: true, message: 'Already sent previously (idempotent skipped).' };
+  }
+
+  // Pre-flight MX Record Check: Ensure recipient domain actually exists on internet
+  const hasMx = await verifyDomainHasMx(recipient);
+  if (!hasMx) {
+    const domain = recipient.split('@')[1] || recipient;
+    await insertLog(
+      'error',
+      'warning',
+      `Blocked dispatch to ${lead.business_name} (${recipient}): Domain '${domain}' does not have active MX mail servers. Email bounce prevented.`,
+      { lead_id: lead.id, recipient, domain },
+      lead.id
+    );
+    return {
+      success: false,
+      message: `Recipient email domain '${domain}' has no active MX records. Blocked to prevent 'Address not found' bounce.`,
+    };
   }
 
   const subject = lead.email_subject || `A tailored web presence idea for ${lead.business_name}`;
