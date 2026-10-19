@@ -2,8 +2,8 @@ import nodemailer from 'nodemailer';
 import { insertLog, insertSentEmail } from './supabase';
 
 const adminEmail = process.env.ADMIN_EMAIL || 'Mshoaibawan371@gmail.com';
-const senderEmail = process.env.SENDER_EMAIL || 'outreach@growthagency.com';
-const senderName = process.env.SENDER_NAME || 'Web Outreach Studio';
+const senderEmail = process.env.SENDER_EMAIL || 'Mshoaibawan371@gmail.com';
+const senderName = process.env.SENDER_NAME || 'Muhammad Shoaib';
 
 function getTransporter() {
   const host = process.env.SMTP_HOST;

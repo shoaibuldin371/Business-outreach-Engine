@@ -17,13 +17,13 @@ class Settings(BaseSettings):
     SUPABASE_KEY: Optional[str] = os.getenv("SUPABASE_KEY", "")
     
     # Email / SMTP Configuration
-    ADMIN_EMAIL: str = os.getenv("ADMIN_EMAIL", "admin@example.com")
+    ADMIN_EMAIL: str = os.getenv("ADMIN_EMAIL", "Mshoaibawan371@gmail.com")
     SMTP_HOST: str = os.getenv("SMTP_HOST", "")
     SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
     SMTP_USER: str = os.getenv("SMTP_USER", "")
     SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
-    SENDER_EMAIL: str = os.getenv("SENDER_EMAIL", "outreach@agency.com")
-    SENDER_NAME: str = os.getenv("SENDER_NAME", "Web Design & Growth Studio")
+    SENDER_EMAIL: str = os.getenv("SENDER_EMAIL", "Mshoaibawan371@gmail.com")
+    SENDER_NAME: str = os.getenv("SENDER_NAME", "Muhammad Shoaib")
     
     # External APIs
     GOOGLE_PLACES_API_KEY: str = os.getenv("GOOGLE_PLACES_API_KEY", "")
