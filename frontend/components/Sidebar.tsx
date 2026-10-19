@@ -81,16 +81,24 @@ export default function Sidebar() {
 
           <div className="space-y-1.5 text-[11px] text-slate-400">
             <div className="flex items-center justify-between">
-              <span className="text-slate-400">Stack:</span>
+              <span className="text-slate-400">Architecture:</span>
               <span className="text-slate-200 font-medium">Full-Stack Next.js</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-slate-400">Hosting:</span>
-              <span className="text-slate-200 font-medium">Vercel Serverless</span>
+              <span className="text-slate-400">Deployment:</span>
+              <span className="text-emerald-400 font-medium flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Vercel (All-in-One)
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-slate-400">Backend & API:</span>
+              <span className="text-slate-200 font-medium">Next.js Serverless</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-slate-400">Database:</span>
-              <span className="text-slate-200 font-medium">Supabase</span>
+              <span className="text-emerald-400 font-medium flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Supabase Connected
+              </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-slate-400">HITL Verification:</span>
