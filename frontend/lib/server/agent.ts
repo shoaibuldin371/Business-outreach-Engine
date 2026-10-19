@@ -30,7 +30,7 @@ export async function verifyWebsite(url: string): Promise<{ hasWebsite: boolean;
   }
 }
 
-export function generateColdPitch(name: string, category: string, city: string) {
+export function generateColdPitch(name: string, category: string, city: string, phone?: string) {
   const businessName = (name || 'your team').trim();
   const niche = (category || 'local services').toLowerCase();
   const location = (city || 'your area').trim();

@@ -1,0 +1,18 @@
+name: 3-Hour Autonomous Business Outreach Engine Scan
+
+on:
+  schedule:
+    # Runs every 3 hours (00:00, 03:00, 06:00, 09:00, 12:00, 15:00, 18:00, 21:00 UTC)
+    - cron: '0 */3 * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub Actions tab
+
+jobs:
+  run-outreach-engine:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Automated Outreach Discovery Scan
+        run: |
+          echo "Triggering 3-hour autonomous scan on live Vercel production deployment..."
+          curl -s -X POST https://business-outreach-engine.vercel.app/api/agent/trigger \
+            -H "Content-Type: application/json" \
+            -d '{"category": "dentists", "city": "Dallas, TX", "count": 5}' | jq .
