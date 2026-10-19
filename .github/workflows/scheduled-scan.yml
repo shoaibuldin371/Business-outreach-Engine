@@ -10,9 +10,9 @@ jobs:
   run-outreach-engine:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger Automated Outreach Discovery Scan
+      - name: Trigger Automated Outreach Discovery Scan (Worldwide)
         run: |
-          echo "Triggering 3-hour autonomous scan on live Vercel production deployment..."
+          echo "Triggering 3-hour autonomous worldwide discovery scan on live Vercel production deployment..."
           curl -s -X POST https://business-outreach-engine.vercel.app/api/agent/trigger \
             -H "Content-Type: application/json" \
-            -d '{"category": "dentists", "city": "Dallas, TX", "count": 5}' | jq .
+            -d '{"count": 5}' | jq .

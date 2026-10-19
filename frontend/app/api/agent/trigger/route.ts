@@ -5,20 +5,25 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Allow up to 60s execution for discovery audit
 
 export async function GET(req: NextRequest) {
-  // Triggered automatically by Vercel Cron every 3 hours
-  const result = await runDiscoveryCycle('dentists', 'Dallas, TX', 5);
+  // Triggered automatically by Vercel Cron every 3 hours (rotates worldwide)
+  const { searchParams } = new URL(req.url);
+  const category = searchParams.get('category') || undefined;
+  const city = searchParams.get('city') || undefined;
+  const count = parseInt(searchParams.get('count') || '5');
+
+  const result = await runDiscoveryCycle(category, city, count, 'scheduled_3h');
   return NextResponse.json(result);
 }
 
 export async function POST(req: NextRequest) {
-  // Triggered manually from dashboard button
+  // Triggered manually from dashboard button or API call
   try {
     const body = await req.json().catch(() => ({}));
-    const category = body.category || 'dentists';
-    const city = body.city || 'Dallas, TX';
-    const count = body.count || 5;
+    const category = body.category && body.category.trim() ? body.category.trim() : undefined;
+    const city = body.city && body.city.trim() ? body.city.trim() : undefined;
+    const count = body.count ? parseInt(body.count) : 5;
 
-    const result = await runDiscoveryCycle(category, city, count);
+    const result = await runDiscoveryCycle(category, city, count, 'manual');
     return NextResponse.json(result);
   } catch (e: any) {
     return NextResponse.json({ status: 'error', message: e.message }, { status: 500 });

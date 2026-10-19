@@ -1,15 +1,45 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+export type {
+  BusinessLead,
+  LeadResearch,
+  OutreachDraft,
+  EmailSendLog,
+  AutomationRun,
+  AutomationLog,
+  ProviderConnection,
+  AutomationSettings,
+  DashboardStats,
+  LeadStatus,
+} from './types';
+import type {
+  BusinessLead,
+  LeadResearch,
+  OutreachDraft,
+  EmailSendLog,
+  AutomationRun,
+  AutomationLog,
+  ProviderConnection,
+  AutomationSettings,
+  DashboardStats,
+  LeadStatus,
+} from './types';
+
+
 let client: SupabaseClient | null = null;
 
 export function getClient(): SupabaseClient | null {
   if (client) return client;
   const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-  const supabaseKey = process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+  const supabaseKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    '';
 
   if (supabaseUrl && supabaseKey && supabaseUrl.startsWith('http')) {
     try {
       client = createClient(supabaseUrl, supabaseKey, {
-        auth: { persistSession: false }
+        auth: { persistSession: false },
       });
       return client;
     } catch (e) {
@@ -19,101 +49,194 @@ export function getClient(): SupabaseClient | null {
   return null;
 }
 
-// In-memory fallback for local dev or before Supabase keys are added
-let memLeads: any[] = [];
-let memLogs: any[] = [];
-let memSentEmails: any[] = [];
+// In-memory resilient store for local dev or fallback
+const memStore = {
+  leads: [] as BusinessLead[],
+  research: [] as LeadResearch[],
+  drafts: [] as OutreachDraft[],
+  sentEmails: [] as EmailSendLog[],
+  runs: [] as AutomationRun[],
+  logs: [] as AutomationLog[],
+  providers: {} as Record<string, ProviderConnection>,
+  settings: {
+    id: 'default',
+    is_paused: false,
+    interval_hours: 3,
+    batch_size: 5,
+    default_category: 'dentists',
+    default_city: 'Dallas, TX',
+    default_country: 'USA',
+    target_offer: 'Custom Modern Website & Client Acquisition System',
+    sender_name: process.env.SENDER_NAME || 'Muhammad Shoaib',
+    sender_email: process.env.SENDER_EMAIL || 'Mshoaibawan371@gmail.com',
+    sender_business: process.env.SENDER_BUSINESS || 'Web Development & Client Acquisition',
+    admin_notification_email: process.env.ADMIN_EMAIL || 'Mshoaibawan371@gmail.com',
+    require_email_found: true,
+    require_manual_approval: true,
+    updated_at: new Date().toISOString(),
+  } as AutomationSettings,
+};
 
-export async function insertLead(data: any) {
+// =========================================================================
+// 1. LEADS
+// =========================================================================
+
+export async function insertLead(data: Partial<BusinessLead>): Promise<BusinessLead> {
   const id = data.id || crypto.randomUUID();
   const now = new Date().toISOString();
-  const lead = {
+  const lead: BusinessLead = {
     id,
+    business_name: data.business_name || 'Untitled Business',
+    category: data.category || 'Local Services',
+    city: data.city || 'Dallas, TX',
+    country: data.country || 'USA',
+    state: data.state || '',
+    address: data.address || '',
+    phone: data.phone || '',
+    email: data.email || '',
+    website: data.website || '',
+    website_status: data.website_status || 'none_found',
+    confidence_score: data.confidence_score ?? 80,
+    research_status: data.research_status || 'completed',
+    status: (data.status as LeadStatus) || 'pending_approval',
+    rejection_reason: data.rejection_reason || '',
+    notes: data.notes || '',
+    email_subject: data.email_subject || '',
+    email_body: data.email_body || '',
+    approval_token: data.approval_token || crypto.randomUUID().replace(/-/g, ''),
+    source: data.source || 'Automated 3-Hour Agent (Next.js)',
+    last_contacted_at: data.last_contacted_at,
     created_at: now,
     updated_at: now,
-    status: 'pending_approval',
-    ...data,
   };
 
   const sb = getClient();
   if (sb) {
     try {
-      const { data: res, error } = await sb.from('leads').insert(lead).select().single();
-      if (!error && res) return res;
-      console.warn('Supabase insertLead error, using local fallback:', error);
+      // Try business_leads first
+      let { data: res, error } = await sb.from('business_leads').insert(lead).select().single();
+      if (!error && res) return res as BusinessLead;
+
+      // Fallback to existing leads table if business_leads table has not run migration yet
+      if (error && error.code === '42P01') {
+        const legacyLead = {
+          id: lead.id,
+          business_name: lead.business_name,
+          category: lead.category,
+          city: lead.city,
+          phone: lead.phone,
+          email: lead.email,
+          website: lead.website,
+          website_status: lead.website_status,
+          score: lead.confidence_score,
+          notes: lead.notes,
+          email_subject: lead.email_subject,
+          email_body: lead.email_body,
+          status: lead.status,
+          approval_token: lead.approval_token,
+          source: lead.source,
+          created_at: lead.created_at,
+          updated_at: lead.updated_at,
+        };
+        const legacyRes = await sb.from('leads').insert(legacyLead).select().single();
+        if (!legacyRes.error && legacyRes.data) return legacyRes.data as unknown as BusinessLead;
+      }
+      console.warn('Supabase insertLead error:', error);
     } catch (e) {
       console.warn('Supabase insertLead exception:', e);
     }
   }
 
-  memLeads.unshift(lead);
+  memStore.leads.unshift(lead);
   return lead;
 }
 
-export async function getLeads(status?: string, limit = 100) {
+export async function getLeads(status?: string, limit = 200): Promise<BusinessLead[]> {
   const sb = getClient();
   if (sb) {
     try {
-      let query = sb.from('leads').select('*').order('created_at', { ascending: false }).limit(limit);
+      // 1. Try business_leads table first
+      let query = sb.from('business_leads').select('*').order('created_at', { ascending: false }).limit(limit);
       if (status && status !== 'all') {
         if (status === 'completed' || status === 'sent') {
           query = query.in('status', ['sent', 'approved']);
         } else if (status === 'active') {
-          query = query.in('status', ['pending_approval', 'rejected', 'error']);
+          query = query.in('status', ['pending_approval', 'draft_ready', 'qualified', 'discovered']);
         } else {
           query = query.eq('status', status);
         }
       }
       const { data, error } = await query;
-      if (!error && data) return data;
-      console.warn('Supabase getLeads error:', error);
+      if (!error && data && data.length > 0) return data as BusinessLead[];
+
+      // 2. Query legacy leads table if business_leads has 0 records or errored
+      let legQuery = sb.from('leads').select('*').order('created_at', { ascending: false }).limit(limit);
+      if (status && status !== 'all') {
+        if (status === 'completed' || status === 'sent') {
+          legQuery = legQuery.in('status', ['sent', 'approved']);
+        } else if (status === 'active') {
+          legQuery = legQuery.in('status', ['pending_approval', 'draft_ready', 'qualified']);
+        } else {
+          legQuery = legQuery.eq('status', status);
+        }
+      }
+      const legRes = await legQuery;
+      if (!legRes.error && legRes.data && legRes.data.length > 0) {
+        return legRes.data as unknown as BusinessLead[];
+      }
+      if (!error && data) return data as BusinessLead[];
     } catch (e) {
-      console.warn('Supabase getLeads error:', e);
+      console.warn('Supabase getLeads exception:', e);
     }
   }
 
-  let list = memLeads;
+  let list = memStore.leads;
   if (status && status !== 'all') {
     if (status === 'completed' || status === 'sent') {
-      list = list.filter(l => l.status === 'sent' || l.status === 'approved');
+      list = list.filter((l) => l.status === 'sent' || l.status === 'approved');
     } else if (status === 'active') {
-      list = list.filter(l => l.status === 'pending_approval' || l.status === 'rejected' || l.status === 'error');
+      list = list.filter((l) => ['pending_approval', 'draft_ready', 'qualified', 'discovered'].includes(l.status));
     } else {
-      list = list.filter(l => l.status === status);
+      list = list.filter((l) => l.status === status);
     }
   }
   return list.slice(0, limit);
 }
 
-export async function getLeadById(id: string) {
+export async function getLeadById(id: string): Promise<BusinessLead | null> {
   const sb = getClient();
   if (sb) {
     try {
-      const { data, error } = await sb.from('leads').select('*').eq('id', id).single();
-      if (!error && data) return data;
-      console.warn('Supabase getLeadById error:', error);
+      const { data, error } = await sb.from('business_leads').select('*').eq('id', id).maybeSingle();
+      if (!error && data) return data as BusinessLead;
+
+      // Check legacy leads table as well
+      const leg = await sb.from('leads').select('*').eq('id', id).maybeSingle();
+      if (!leg.error && leg.data) return leg.data as unknown as BusinessLead;
     } catch (e) {
-      console.warn('Supabase getLeadById error:', e);
+      console.warn('Supabase getLeadById exception:', e);
     }
   }
-  return memLeads.find(l => l.id === id) || null;
+  return memStore.leads.find((l) => l.id === id) || null;
 }
 
-export async function getLeadByToken(token: string) {
+export async function getLeadByToken(token: string): Promise<BusinessLead | null> {
   const sb = getClient();
   if (sb) {
     try {
-      const { data, error } = await sb.from('leads').select('*').eq('approval_token', token).single();
-      if (!error && data) return data;
-      console.warn('Supabase getLeadByToken error:', error);
+      const { data, error } = await sb.from('business_leads').select('*').eq('approval_token', token).maybeSingle();
+      if (!error && data) return data as BusinessLead;
+
+      const leg = await sb.from('leads').select('*').eq('approval_token', token).maybeSingle();
+      if (!leg.error && leg.data) return leg.data as unknown as BusinessLead;
     } catch (e) {
-      console.warn('Supabase getLeadByToken error:', e);
+      console.warn('Supabase getLeadByToken exception:', e);
     }
   }
-  return memLeads.find(l => l.approval_token === token) || null;
+  return memStore.leads.find((l) => l.approval_token === token) || null;
 }
 
-export async function updateLead(id: string, updates: any) {
+export async function updateLead(id: string, updates: Partial<BusinessLead>): Promise<BusinessLead | null> {
   const updated = {
     ...updates,
     updated_at: new Date().toISOString(),
@@ -122,26 +245,405 @@ export async function updateLead(id: string, updates: any) {
   const sb = getClient();
   if (sb) {
     try {
-      const { data, error } = await sb.from('leads').update(updated).eq('id', id).select().single();
-      if (!error && data) return data;
-      console.warn('Supabase updateLead error:', error);
+      const { data, error } = await sb.from('business_leads').update(updated).eq('id', id).select().maybeSingle();
+      if (!error && data) {
+        // Also update legacy leads table if exists
+        try {
+          await sb.from('leads').update(updated).eq('id', id);
+        } catch {
+          // ignore
+        }
+        return data as BusinessLead;
+      }
+
+      // If not in business_leads, try updating leads table
+      const leg = await sb.from('leads').update(updated).eq('id', id).select().maybeSingle();
+      if (!leg.error && leg.data) return leg.data as unknown as BusinessLead;
     } catch (e) {
-      console.warn('Supabase updateLead error:', e);
+      console.warn('Supabase updateLead exception:', e);
     }
   }
 
-  const idx = memLeads.findIndex(l => l.id === id);
+  const idx = memStore.leads.findIndex((l) => l.id === id);
   if (idx !== -1) {
-    memLeads[idx] = { ...memLeads[idx], ...updated };
-    return memLeads[idx];
+    memStore.leads[idx] = { ...memStore.leads[idx], ...updated } as BusinessLead;
+    return memStore.leads[idx];
   }
   return null;
 }
 
-export async function insertLog(step: string, status: string, message: string, details?: any, leadId?: string) {
-  const logEntry = {
+export async function findExistingLeadByNameAndCity(name: string, city: string): Promise<BusinessLead | null> {
+  const normName = name.trim().toLowerCase();
+  const normCity = city.trim().toLowerCase();
+
+  const sb = getClient();
+  if (sb) {
+    try {
+      const { data } = await sb
+        .from('business_leads')
+        .select('*')
+        .ilike('business_name', `%${name.trim()}%`)
+        .ilike('city', `%${city.split(',')[0].trim()}%`)
+        .limit(1);
+      if (data && data.length > 0) return data[0] as BusinessLead;
+
+      const leg = await sb
+        .from('leads')
+        .select('*')
+        .ilike('business_name', `%${name.trim()}%`)
+        .ilike('city', `%${city.split(',')[0].trim()}%`)
+        .limit(1);
+      if (leg.data && leg.data.length > 0) return leg.data[0] as unknown as BusinessLead;
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  return (
+    memStore.leads.find(
+      (l) =>
+        l.business_name.toLowerCase().includes(normName) ||
+        (normName.includes(l.business_name.toLowerCase()) && l.city?.toLowerCase().includes(normCity))
+    ) || null
+  );
+}
+
+// =========================================================================
+// 2. LEAD RESEARCH
+// =========================================================================
+
+export async function saveLeadResearch(research: Partial<LeadResearch>): Promise<LeadResearch> {
+  const rec: LeadResearch = {
+    id: research.id || crypto.randomUUID(),
+    lead_id: research.lead_id!,
+    source_urls: research.source_urls || [],
+    website_checked_url: research.website_checked_url,
+    website_check_result: research.website_check_result,
+    website_check_details: research.website_check_details || {},
+    growth_signals: research.growth_signals || {},
+    social_profiles: research.social_profiles || {},
+    contact_evidence: research.contact_evidence || {},
+    raw_research_notes: research.raw_research_notes || '',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  const sb = getClient();
+  if (sb) {
+    try {
+      const { data, error } = await sb.from('lead_research').insert(rec).select().single();
+      if (!error && data) return data as LeadResearch;
+    } catch (e) {
+      console.warn('saveLeadResearch exception:', e);
+    }
+  }
+
+  memStore.research.unshift(rec);
+  return rec;
+}
+
+export async function getLeadResearch(leadId: string): Promise<LeadResearch | null> {
+  const sb = getClient();
+  if (sb) {
+    try {
+      const { data, error } = await sb
+        .from('lead_research')
+        .select('*')
+        .eq('lead_id', leadId)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (!error && data && data.length > 0) return data[0] as LeadResearch;
+    } catch (e) {
+      console.warn('getLeadResearch exception:', e);
+    }
+  }
+  return memStore.research.find((r) => r.lead_id === leadId) || null;
+}
+
+// =========================================================================
+// 3. OUTREACH DRAFTS
+// =========================================================================
+
+export async function saveOutreachDraft(draft: Partial<OutreachDraft>): Promise<OutreachDraft> {
+  const rec: OutreachDraft = {
+    id: draft.id || crypto.randomUUID(),
+    lead_id: draft.lead_id!,
+    version: draft.version || 1,
+    subject: draft.subject || '',
+    body: draft.body || '',
+    offer_service: draft.offer_service || 'Custom Website & Client Booking System',
+    personalization_hooks: draft.personalization_hooks || {},
+    ai_model: draft.ai_model || 'claude-3-5-sonnet',
+    status: draft.status || 'pending_approval',
+    reviewer_notes: draft.reviewer_notes,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  const sb = getClient();
+  if (sb) {
+    try {
+      const { data, error } = await sb.from('outreach_drafts').insert(rec).select().single();
+      if (!error && data) return data as OutreachDraft;
+    } catch (e) {
+      console.warn('saveOutreachDraft exception:', e);
+    }
+  }
+
+  memStore.drafts.unshift(rec);
+  return rec;
+}
+
+export async function getDraftsForLead(leadId: string): Promise<OutreachDraft[]> {
+  const sb = getClient();
+  if (sb) {
+    try {
+      const { data, error } = await sb
+        .from('outreach_drafts')
+        .select('*')
+        .eq('lead_id', leadId)
+        .order('created_at', { ascending: false });
+      if (!error && data) return data as OutreachDraft[];
+    } catch (e) {
+      console.warn('getDraftsForLead exception:', e);
+    }
+  }
+  return memStore.drafts.filter((d) => d.lead_id === leadId);
+}
+
+// =========================================================================
+// 4. EMAIL SEND LOGS & IDEMPOTENCY
+// =========================================================================
+
+export async function isEmailAlreadySent(leadId: string, recipient: string): Promise<boolean> {
+  const sb = getClient();
+  if (sb) {
+    try {
+      const { data } = await sb
+        .from('email_send_logs')
+        .select('id')
+        .eq('lead_id', leadId)
+        .eq('recipient_email', recipient)
+        .eq('status', 'sent')
+        .limit(1);
+      if (data && data.length > 0) return true;
+
+      const leg = await sb
+        .from('sent_emails')
+        .select('id')
+        .eq('lead_id', leadId)
+        .eq('recipient_email', recipient)
+        .eq('status', 'sent')
+        .limit(1);
+      if (leg.data && leg.data.length > 0) return true;
+    } catch (e) {
+      // ignore
+    }
+  }
+  return memStore.sentEmails.some(
+    (e) => e.lead_id === leadId && e.recipient_email === recipient && e.status === 'sent'
+  );
+}
+
+export async function recordSentEmail(entry: Partial<EmailSendLog>): Promise<EmailSendLog> {
+  const rec: EmailSendLog = {
+    id: entry.id || crypto.randomUUID(),
+    lead_id: entry.lead_id,
+    draft_id: entry.draft_id,
+    recipient_email: entry.recipient_email || '',
+    sender_email: entry.sender_email || process.env.SENDER_EMAIL || 'Mshoaibawan371@gmail.com',
+    subject: entry.subject || '',
+    body: entry.body || '',
+    provider: entry.provider || 'gmail_oauth',
+    provider_message_id: entry.provider_message_id,
+    status: entry.status || 'sent',
+    error_message: entry.error_message,
+    idempotency_key: entry.idempotency_key || `${entry.lead_id}-${Date.now()}`,
+    sent_at: new Date().toISOString(),
+  };
+
+  const sb = getClient();
+  if (sb) {
+    try {
+      const { data, error } = await sb.from('email_send_logs').insert(rec).select().single();
+      if (!error && data) return data as EmailSendLog;
+
+      // Also mirror to legacy sent_emails
+      await sb.from('sent_emails').insert({
+        id: rec.id,
+        lead_id: rec.lead_id,
+        recipient_email: rec.recipient_email,
+        subject: rec.subject,
+        body: rec.body,
+        sender_type: rec.provider,
+        status: rec.status,
+        error_message: rec.error_message,
+        sent_at: rec.sent_at,
+      });
+    } catch (e) {
+      console.warn('recordSentEmail exception:', e);
+    }
+  }
+
+  memStore.sentEmails.unshift(rec);
+  return rec;
+}
+
+export async function getSentEmails(limit = 100): Promise<EmailSendLog[]> {
+  const sb = getClient();
+  if (sb) {
+    try {
+      const { data, error } = await sb
+        .from('email_send_logs')
+        .select('*')
+        .order('sent_at', { ascending: false })
+        .limit(limit);
+      if (!error && data) return data as EmailSendLog[];
+
+      const leg = await sb
+        .from('sent_emails')
+        .select('*')
+        .order('sent_at', { ascending: false })
+        .limit(limit);
+      if (!leg.error && leg.data) {
+        return leg.data.map((l: any) => ({
+          id: l.id,
+          lead_id: l.lead_id,
+          recipient_email: l.recipient_email,
+          sender_email: process.env.SENDER_EMAIL || 'Mshoaibawan371@gmail.com',
+          subject: l.subject,
+          body: l.body,
+          provider: (l.sender_type || 'smtp') as any,
+          status: l.status,
+          error_message: l.error_message,
+          sent_at: l.sent_at,
+        }));
+      }
+    } catch (e) {
+      console.warn('getSentEmails exception:', e);
+    }
+  }
+  return memStore.sentEmails.slice(0, limit);
+}
+
+// =========================================================================
+// 5. AUTOMATION RUNS
+// =========================================================================
+
+export async function createAutomationRun(
+  triggerType: 'scheduled_3h' | 'manual' | 'api' = 'manual',
+  category?: string,
+  city?: string,
+  targetCount = 5
+): Promise<AutomationRun> {
+  const rec: AutomationRun = {
     id: crypto.randomUUID(),
-    lead_id: leadId || null,
+    status: 'running',
+    trigger_type: triggerType,
+    category,
+    city,
+    target_count: targetCount,
+    discovered_count: 0,
+    qualified_count: 0,
+    drafted_count: 0,
+    error_count: 0,
+    started_at: new Date().toISOString(),
+  };
+
+  const sb = getClient();
+  if (sb) {
+    try {
+      const { data, error } = await sb.from('automation_runs').insert(rec).select().single();
+      if (!error && data) return data as AutomationRun;
+    } catch (e) {
+      console.warn('createAutomationRun exception:', e);
+    }
+  }
+
+  memStore.runs.unshift(rec);
+  return rec;
+}
+
+export async function updateAutomationRun(
+  id: string,
+  updates: Partial<AutomationRun>
+): Promise<AutomationRun | null> {
+  const sb = getClient();
+  if (sb) {
+    try {
+      const { data, error } = await sb
+        .from('automation_runs')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+      if (!error && data) return data as AutomationRun;
+    } catch (e) {
+      console.warn('updateAutomationRun exception:', e);
+    }
+  }
+
+  const idx = memStore.runs.findIndex((r) => r.id === id);
+  if (idx !== -1) {
+    memStore.runs[idx] = { ...memStore.runs[idx], ...updates };
+    return memStore.runs[idx];
+  }
+  return null;
+}
+
+export async function getLatestAutomationRun(): Promise<AutomationRun | null> {
+  const sb = getClient();
+  if (sb) {
+    try {
+      const { data, error } = await sb
+        .from('automation_runs')
+        .select('*')
+        .order('started_at', { ascending: false })
+        .limit(1);
+      if (!error && data && data.length > 0) return data[0] as AutomationRun;
+    } catch (e) {
+      console.warn('getLatestAutomationRun exception:', e);
+    }
+  }
+  return memStore.runs[0] || null;
+}
+
+export async function isAutomationCurrentlyRunning(): Promise<boolean> {
+  const sb = getClient();
+  if (sb) {
+    try {
+      // If a run was started less than 5 minutes ago and status is 'running'
+      const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      const { data } = await sb
+        .from('automation_runs')
+        .select('id')
+        .eq('status', 'running')
+        .gt('started_at', fiveMinsAgo)
+        .limit(1);
+      if (data && data.length > 0) return true;
+    } catch (e) {
+      // ignore
+    }
+  }
+  return false;
+}
+
+// =========================================================================
+// 6. AUTOMATION LOGS
+// =========================================================================
+
+export async function insertLog(
+  step: AutomationLog['step'],
+  status: AutomationLog['status'],
+  message: string,
+  details?: Record<string, any>,
+  leadId?: string,
+  runId?: string
+): Promise<AutomationLog> {
+  const logEntry: AutomationLog = {
+    id: crypto.randomUUID(),
+    run_id: runId,
+    lead_id: leadId,
     step,
     status,
     message,
@@ -152,104 +654,207 @@ export async function insertLog(step: string, status: string, message: string, d
   const sb = getClient();
   if (sb) {
     try {
-      const { error } = await sb.from('logs').insert(logEntry);
+      const { error } = await sb.from('automation_logs').insert(logEntry);
       if (!error) return logEntry;
-      console.warn('Supabase insertLog error:', error);
+
+      // Fallback to legacy logs table
+      await sb.from('logs').insert({
+        id: logEntry.id,
+        lead_id: logEntry.lead_id,
+        step: logEntry.step,
+        status: logEntry.status,
+        message: logEntry.message,
+        details: logEntry.details,
+        created_at: logEntry.created_at,
+      });
+      return logEntry;
     } catch (e) {
       console.warn('Supabase insertLog error:', e);
     }
   }
 
-  memLogs.unshift(logEntry);
+  memStore.logs.unshift(logEntry);
   return logEntry;
 }
 
-export async function getLogs(limit = 200) {
+export async function getLogs(limit = 200, step?: string, status?: string): Promise<AutomationLog[]> {
   const sb = getClient();
   if (sb) {
     try {
-      const { data, error } = await sb.from('logs').select('*').order('created_at', { ascending: false }).limit(limit);
-      if (!error && data) return data;
-      console.warn('Supabase getLogs error:', error);
+      let query = sb.from('automation_logs').select('*').order('created_at', { ascending: false }).limit(limit);
+      if (step && step !== 'all') query = query.eq('step', step);
+      if (status && status !== 'all') query = query.eq('status', status);
+
+      const { data, error } = await query;
+      if (!error && data) return data as AutomationLog[];
+
+      // Fallback to legacy logs table
+      let legQuery = sb.from('logs').select('*').order('created_at', { ascending: false }).limit(limit);
+      if (step && step !== 'all') legQuery = legQuery.eq('step', step);
+      if (status && status !== 'all') legQuery = legQuery.eq('status', status);
+      const legRes = await legQuery;
+      if (!legRes.error && legRes.data) return legRes.data as unknown as AutomationLog[];
     } catch (e) {
       console.warn('Supabase getLogs error:', e);
     }
   }
-  return memLogs.slice(0, limit);
+
+  let list = memStore.logs;
+  if (step && step !== 'all') list = list.filter((l) => l.step === step);
+  if (status && status !== 'all') list = list.filter((l) => l.status === status);
+  return list.slice(0, limit);
 }
 
-export async function insertSentEmail(leadId: string | null, recipient: string, subject: string, body: string, senderType = 'automated_approved', status = 'sent', errorMsg?: string) {
-  const record = {
-    id: crypto.randomUUID(),
-    lead_id: leadId || null,
-    recipient_email: recipient,
-    subject,
-    body,
-    sender_type: senderType,
-    status,
-    error_message: errorMsg || null,
-    sent_at: new Date().toISOString(),
+// =========================================================================
+// 7. PROVIDER CONNECTIONS
+// =========================================================================
+
+export async function getProviderConnection(
+  provider: ProviderConnection['provider']
+): Promise<ProviderConnection | null> {
+  const sb = getClient();
+  if (sb) {
+    try {
+      const { data, error } = await sb.from('provider_connections').select('*').eq('provider', provider).single();
+      if (!error && data) return data as ProviderConnection;
+    } catch (e) {
+      console.warn('getProviderConnection exception:', e);
+    }
+  }
+  return memStore.providers[provider] || null;
+}
+
+export async function saveProviderConnection(
+  entry: Partial<ProviderConnection> & { provider: ProviderConnection['provider'] }
+): Promise<ProviderConnection> {
+  const now = new Date().toISOString();
+  const rec: ProviderConnection = {
+    id: entry.id || crypto.randomUUID(),
+    provider: entry.provider,
+    account_email: entry.account_email,
+    access_token: entry.access_token,
+    refresh_token: entry.refresh_token,
+    token_expiry: entry.token_expiry,
+    scopes: entry.scopes || [],
+    is_connected: entry.is_connected ?? true,
+    config: entry.config || {},
+    updated_at: now,
   };
 
   const sb = getClient();
   if (sb) {
     try {
-      const { data, error } = await sb.from('sent_emails').insert(record).select().single();
-      if (!error && data) return data;
-      console.warn('Supabase insertSentEmail error:', error);
+      const { data, error } = await sb
+        .from('provider_connections')
+        .upsert(rec, { onConflict: 'provider' })
+        .select()
+        .single();
+      if (!error && data) return data as ProviderConnection;
     } catch (e) {
-      console.warn('Supabase insertSentEmail error:', e);
+      console.warn('saveProviderConnection exception:', e);
     }
   }
 
-  memSentEmails.unshift(record);
-  return record;
+  memStore.providers[entry.provider] = rec;
+  return rec;
 }
 
-export async function getStats() {
+// =========================================================================
+// 8. SETTINGS
+// =========================================================================
+
+export async function getAutomationSettings(): Promise<AutomationSettings> {
   const sb = getClient();
   if (sb) {
     try {
-      const { data: leads } = await sb.from('leads').select('*');
-      const { count: logsCount } = await sb.from('logs').select('*', { count: 'exact', head: true });
-      const { count: sentCount } = await sb.from('sent_emails').select('*', { count: 'exact', head: true });
-
-      const allLeads = leads || [];
-      const total = allLeads.length;
-      const noWeb = allLeads.filter(l => !l.website || l.website_status?.includes('No website') || l.website_status?.includes('Unreachable')).length;
-      const pending = allLeads.filter(l => l.status === 'pending_approval').length;
-      const rejected = allLeads.filter(l => l.status === 'rejected').length;
-      const sent = allLeads.filter(l => l.status === 'sent' || l.status === 'approved').length;
-
-      return {
-        total_leads: total,
-        no_website_count: noWeb,
-        pending_approval: pending,
-        rejected_count: rejected,
-        sent_count: sent,
-        total_logs: logsCount || 0,
-        total_sent_emails: sentCount || 0,
-      };
+      const { data, error } = await sb.from('automation_settings').select('*').eq('id', 'default').single();
+      if (!error && data) return data as AutomationSettings;
     } catch (e) {
-      console.warn('Error fetching Supabase stats:', e);
+      console.warn('getAutomationSettings exception:', e);
+    }
+  }
+  return memStore.settings;
+}
+
+export async function updateAutomationSettings(updates: Partial<AutomationSettings>): Promise<AutomationSettings> {
+  const updated = {
+    ...memStore.settings,
+    ...updates,
+    updated_at: new Date().toISOString(),
+  };
+
+  const sb = getClient();
+  if (sb) {
+    try {
+      const { data, error } = await sb
+        .from('automation_settings')
+        .upsert(updated, { onConflict: 'id' })
+        .select()
+        .single();
+      if (!error && data) return data as AutomationSettings;
+    } catch (e) {
+      console.warn('updateAutomationSettings exception:', e);
     }
   }
 
+  memStore.settings = updated;
+  return updated;
+}
+
+// =========================================================================
+// 9. DASHBOARD STATS
+// =========================================================================
+
+export async function getDashboardStats(): Promise<DashboardStats> {
   const leads = await getLeads('all', 1000);
   const logs = await getLogs(1000);
+  const settings = await getAutomationSettings();
+  const lastRun = await getLatestAutomationRun();
+
   const total = leads.length;
-  const noWeb = leads.filter(l => !l.website || l.website_status?.includes('No website') || l.website_status?.includes('Unreachable')).length;
-  const pending = leads.filter(l => l.status === 'pending_approval').length;
-  const rejected = leads.filter(l => l.status === 'rejected').length;
-  const sent = leads.filter(l => l.status === 'sent' || l.status === 'approved').length;
+  const noWeb = leads.filter(
+    (l) => !l.website || l.website_status === 'none_found' || l.website_status === 'unreachable'
+  ).length;
+  const pending = leads.filter((l) => l.status === 'pending_approval' || l.status === 'draft_ready').length;
+  const approved = leads.filter((l) => l.status === 'approved').length;
+  const sent = leads.filter((l) => l.status === 'sent').length;
+  const rejected = leads.filter((l) => l.status === 'rejected').length;
+  const missingContact = leads.filter((l) => l.status === 'missing_contact').length;
 
   return {
     total_leads: total,
     no_website_count: noWeb,
     pending_approval: pending,
-    rejected_count: rejected,
+    approved_count: approved,
     sent_count: sent,
+    rejected_count: rejected,
+    missing_contact_count: missingContact,
     total_logs: logs.length,
-    total_sent_emails: memSentEmails.length,
+    total_sent_emails: sent,
+    automation_active: !settings.is_paused,
+    last_run: lastRun,
   };
 }
+
+export const getStats = getDashboardStats;
+
+export async function insertSentEmail(
+  leadId: string,
+  recipient: string,
+  subject: string,
+  body: string,
+  senderType = 'automated_approved',
+  status = 'sent',
+  errorMessage?: string
+) {
+  return recordSentEmail({
+    lead_id: leadId,
+    recipient_email: recipient,
+    subject,
+    body,
+    provider: (senderType === 'custom_manual' ? 'gmail_oauth' : 'smtp') as any,
+    status: (status === 'sent' ? 'sent' : 'failed') as any,
+    error_message: errorMessage,
+  });
+}
+

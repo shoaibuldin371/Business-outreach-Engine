@@ -1,219 +1,315 @@
-import { insertLead, insertLog } from './supabase';
+import {
+  insertLead,
+  insertLog,
+  saveLeadResearch,
+  saveOutreachDraft,
+  createAutomationRun,
+  updateAutomationRun,
+  isAutomationCurrentlyRunning,
+  getAutomationSettings,
+  findExistingLeadByNameAndCity,
+} from './supabase';
+import { 
+  discoverBusinesses, 
+  getRandomWorldwideHub, 
+  getRandomWorldwideCategory 
+} from './discovery';
+import { verifyBusinessWebsite } from './verification';
+import { conductBusinessResearch } from './research';
+import { generatePersonalizedPitch } from './ai';
 import { sendHitlApprovalEmail } from './email';
+import { BusinessLead } from './types';
 
-export async function verifyWebsite(url: string): Promise<{ hasWebsite: boolean; status: string }> {
-  if (!url || !url.trim()) {
-    return { hasWebsite: false, status: 'No website listed' };
+export interface CycleResult {
+  status: 'success' | 'paused' | 'locked' | 'error';
+  message: string;
+  run_id?: string;
+  leads_discovered?: number;
+  leads_qualified?: number;
+  leads_missing_email?: number;
+  leads?: BusinessLead[];
+}
+
+/**
+ * Runs a complete, automated discovery and research cycle
+ * Now supports worldwide locations and strict deduplication
+ */
+export async function runDiscoveryCycle(
+  customCategory?: string,
+  customCity?: string,
+  customCount?: number,
+  triggerType: 'scheduled_3h' | 'manual' | 'api' = 'manual'
+): Promise<CycleResult> {
+  const settings = await getAutomationSettings();
+
+  // 1. Check if paused
+  if (settings.is_paused && triggerType === 'scheduled_3h') {
+    return {
+      status: 'paused',
+      message: 'Automation is currently paused in settings. Scheduled run skipped.',
+    };
   }
 
-  let cleanUrl = url.trim();
-  if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
-    cleanUrl = `https://${cleanUrl}`;
+  // 2. Prevent overlapping runs
+  const isRunning = await isAutomationCurrentlyRunning();
+  if (isRunning) {
+    return {
+      status: 'locked',
+      message: 'Another discovery run is currently in progress. Skipping to prevent overlap.',
+    };
   }
+
+  // Dynamic Worldwide Hub Selection if no custom city passed or if default Dallas is passed
+  const isDefaultCity = !customCity || customCity.trim().toLowerCase() === 'dallas, tx';
+  const hub = isDefaultCity ? getRandomWorldwideHub() : null;
+  const city = customCity && !isDefaultCity ? customCity : (hub ? `${hub.city}, ${hub.country}` : 'London, United Kingdom');
+  const category = customCategory && customCategory !== 'dentists' ? customCategory : getRandomWorldwideCategory();
+  const count = customCount || settings.batch_size || 5;
+
+  const run = await createAutomationRun(triggerType, category, city, count);
+  const startTime = Date.now();
+
+  await insertLog(
+    'find',
+    'info',
+    `Initiated worldwide outreach cycle for ${count} target businesses in '${city}' (${category}) [Trigger: ${triggerType}]`,
+    { category, city, count, run_id: run.id, region: hub?.region || 'Global' },
+    undefined,
+    run.id
+  );
+
+  const qualifiedLeads: BusinessLead[] = [];
+  let discoveredCount = 0;
+  let qualifiedCount = 0;
+  let missingEmailCount = 0;
+  let errorCount = 0;
 
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 6000);
-    const resp = await fetch(cleanUrl, {
-      method: 'GET',
-      headers: { 'User-Agent': 'Mozilla/5.0 OutreachAudit/2.0' },
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
+    // 3. Discover candidate businesses across worldwide providers
+    const candidates = await discoverBusinesses(category, city, count);
+    discoveredCount = candidates.length;
 
-    if (resp.status < 400) {
-      return { hasWebsite: true, status: `Live (${resp.status})` };
-    }
-    return { hasWebsite: false, status: `Unreachable (${resp.status})` };
-  } catch (e) {
-    return { hasWebsite: false, status: 'Unreachable / Inactive' };
-  }
-}
+    await insertLog(
+      'find',
+      discoveredCount > 0 ? 'success' : 'warning',
+      `Discovered ${discoveredCount} prospective business listings in ${city} for auditing.`,
+      { candidates_count: discoveredCount, run_id: run.id },
+      undefined,
+      run.id
+    );
 
-export function generateColdPitch(name: string, category: string, city: string, phone?: string) {
-  const businessName = (name || 'your team').trim();
-  const niche = (category || 'local services').toLowerCase();
-  const location = (city || 'your area').trim();
-  const myEmail = process.env.ADMIN_EMAIL || 'Mshoaibawan371@gmail.com';
-
-  const subject = `Partnership idea for ${businessName} — Web Presence & Client Acquisition`;
-  const body = `Dear ${businessName} Team,
-
-I came across your business while researching reputable ${niche} specialists in ${location}. Your positive customer feedback and local reputation really stood out.
-
-While reviewing your digital footprint, I noticed that ${businessName} does not currently have an active, dedicated website where potential clients can view your full services, explore customer testimonials, or send direct project inquiries.
-
-In today's market, over 84% of local customers search online before making a booking decision. I help businesses build sleek, fast, and modern websites tailored specifically for ${niche} providers, focused on:
-
-• Converting local searches into confirmed client appointments
-• Establishing strong credibility and standing out from competitors
-• Providing a frictionless mobile experience with zero technical hassle on your end
-
-Would you be open to a brief 5-minute conversation sometime this week? I would be delighted to share a tailored preliminary design concept for ${businessName}, completely free and with no obligation.
-
-Warm regards,
-
-Muhammad Shoaib
-Web Development & Growth Consultant
-Email: ${myEmail}
-
-(If this is not relevant to you at this time, please feel free to reply with "No thanks" and I will respectfully ensure no further follow-ups are sent.)`;
-
-  return { subject, body };
-}
-
-export async function searchGooglePlaces(category: string, city: string, count = 5) {
-  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-  if (!apiKey) return [];
-
-  try {
-    const url = 'https://places.googleapis.com/v1/places:searchText';
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': apiKey,
-        'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.websiteUri,places.nationalPhoneNumber,places.primaryTypeDisplayName'
-      },
-      body: JSON.stringify({ textQuery: `${category} in ${city}`, pageSize: count * 2 }),
-    });
-
-    if (!resp.ok) return [];
-    const data = await resp.json();
-    return (data.places || []).map((p: any) => ({
-      business_name: p.displayName?.text || '',
-      category: p.primaryTypeDisplayName?.text || category,
-      city,
-      phone: p.nationalPhoneNumber || '',
-      email: `contact@${(p.displayName?.text || '').toLowerCase().replace(/[^a-z0-9]/g, '')}.com`,
-      website: p.websiteUri || '',
-      notes: `Discovered via Google Places API in ${city}. Address: ${p.formattedAddress || ''}`
-    }));
-  } catch (e) {
-    console.warn('Google Places search error:', e);
-    return [];
-  }
-}
-
-export function getRealisticLocalCandidates(category: string, city: string, count = 5) {
-  const catTitle = category.charAt(0).toUpperCase() + category.slice(1);
-  const cityName = city.split(',')[0].trim();
-  const adminEmail = process.env.ADMIN_EMAIL || 'Mshoaibawan371@gmail.com';
-
-  const candidates = [
-    {
-      business_name: `${cityName} Precision ${catTitle}`,
-      category,
-      city,
-      phone: '+1 (214) 555-0142',
-      email: adminEmail, // Safe testing email
-      website: '', // Missing
-      notes: `High rating (4.8 stars) in ${cityName}. Active phone and storefront, but no active web page.`
-    },
-    {
-      business_name: `Elite ${catTitle} & Repair Co.`,
-      category,
-      city,
-      phone: '+1 (214) 555-0189',
-      email: `contact@elite${category.replace(/[^a-z0-9]/g, '')}${cityName.toLowerCase()}.org`,
-      website: 'http://non-existent-domain-404-check-outreach.org', // Dead website
-      notes: `Established local ${category} service. Former website is 404/unreachable. Potential client.`
-    },
-    {
-      business_name: `Apex ${cityName} ${catTitle} Group`,
-      category,
-      city,
-      phone: '+1 (214) 555-0233',
-      email: `info@apex${category.toLowerCase()}${cityName.toLowerCase()}.net`,
-      website: '', // Missing
-      notes: `Operating locally for 5+ years. Relying purely on word of mouth and phone calls.`
-    },
-    {
-      business_name: `Neighborhood ${catTitle} Studio`,
-      category,
-      city,
-      phone: '+1 (214) 555-0371',
-      email: `hello@neighborhood${category.toLowerCase()}.com`,
-      website: 'https://google.com', // Live website to demonstrate filtering
-      notes: `Has an active modern website.`
-    },
-    {
-      business_name: `Metro ${catTitle} Solutions`,
-      category,
-      city,
-      phone: '+1 (214) 555-0455',
-      email: `service@metro${category.toLowerCase()}${cityName.toLowerCase()}.biz`,
-      website: '', // Missing
-      notes: `Frequently booked local contractor in ${cityName}. Missing online inquiry gateway.`
-    }
-  ];
-
-  return candidates.slice(0, count);
-}
-
-export async function runDiscoveryCycle(category = 'dentists', city = 'Dallas, TX', count = 5) {
-  await insertLog('find', 'info', `Starting discovery cycle for ${count} businesses in '${city}' (${category})...`, { category, city, count });
-
-  const qualifiedLeads: any[] = [];
-
-  try {
-    let candidates = await searchGooglePlaces(category, city, count);
-    if (!candidates || candidates.length === 0) {
-      candidates = getRealisticLocalCandidates(category, city, count);
-    }
-
-    await insertLog('find', 'success', `Discovered ${candidates.length} candidate business listings in ${city}.`, { candidates_count: candidates.length });
-
+    // 4. Audit, research, and draft each candidate
     for (const candidate of candidates) {
+      if (qualifiedLeads.length >= count) break;
+
       const name = candidate.business_name;
-      const rawWeb = candidate.website;
-      const { hasWebsite, status: webStatus } = await verifyWebsite(rawWeb);
+      try {
+        // Strict Deduplication Check before processing
+        const existing = await findExistingLeadByNameAndCity(name, candidate.city);
+        if (existing) {
+          await insertLog(
+            'explore',
+            'info',
+            `Skipping '${name}': already contacted or stored in pipeline.`,
+            { business: name, city: candidate.city },
+            undefined,
+            run.id
+          );
+          continue;
+        }
 
-      await insertLog('explore', 'info', `Audited ${name}: Website check result = '${webStatus}'`, { business: name, url: rawWeb, status: webStatus });
+        // Step A: Audit Website Presence
+        const audit = await verifyBusinessWebsite(name, candidate.city, candidate.website);
 
-      if (!hasWebsite) {
-        const { subject, body } = generateColdPitch(name, candidate.category || category, candidate.city || city, candidate.phone);
+        await insertLog(
+          'explore',
+          audit.hasWebsite ? 'info' : 'warning',
+          `Audited '${name}': Website status = '${audit.statusLabel}'.`,
+          {
+            business: name,
+            website_status: audit.status,
+            checked_url: audit.checkedUrl,
+            evidence: audit.evidenceNotes,
+          },
+          undefined,
+          run.id
+        );
+
+        // If active live website exists, skip candidate
+        if (audit.hasWebsite) {
+          continue;
+        }
+
+        // Step B: Deep Presence Research & Public Contact Discovery
+        const research = await conductBusinessResearch(
+          name,
+          candidate.category,
+          candidate.city,
+          candidate.phone,
+          candidate.email,
+          audit,
+          candidate.rating,
+          candidate.review_count
+        );
+
+        // Step C: Generate Personalized Outreach Pitch
+        const pitch = await generatePersonalizedPitch({
+          businessName: name,
+          category: candidate.category,
+          city: candidate.city,
+          research,
+          offerService: settings.target_offer,
+          senderName: settings.sender_name,
+          senderEmail: settings.sender_email,
+          senderBusiness: settings.sender_business,
+        });
+
+        // Determine lead status
+        const hasContactEmail = Boolean(research.public_email && research.public_email.trim());
+        const leadStatus = hasContactEmail ? 'pending_approval' : 'missing_contact';
+        if (!hasContactEmail) missingEmailCount++;
+
         const token = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
 
-        const leadRecord = {
+        // Step D: Save Master Lead Record to Supabase
+        const leadRecord: Partial<BusinessLead> = {
           business_name: name,
-          category: candidate.category || category,
-          city: candidate.city || city,
-          phone: candidate.phone || '',
-          email: candidate.email || '',
-          website: rawWeb,
-          website_status: webStatus,
-          score: !rawWeb ? 85 : 70,
-          notes: candidate.notes || 'No active website detected.',
-          email_subject: subject,
-          email_body: body,
-          status: 'pending_approval',
+          category: candidate.category,
+          city: candidate.city,
+          country: candidate.country || 'Worldwide',
+          address: candidate.address,
+          phone: research.public_phone || candidate.phone || '',
+          email: research.public_email || '',
+          website: audit.checkedUrl || '',
+          website_status: audit.status,
+          confidence_score: research.confidence_score,
+          research_status: 'completed',
+          status: leadStatus,
+          notes: research.research_notes,
+          email_subject: pitch.subject,
+          email_body: pitch.body,
           approval_token: token,
-          source: 'Automated 3-Hour Agent (Vercel)'
+          source: candidate.source,
         };
 
-        const saved = await insertLead(leadRecord);
-        qualifiedLeads.push(saved);
+        const savedLead = await insertLead(leadRecord);
 
-        await insertLog('draft', 'success', `Generated outreach draft for '${name}' and saved to Supabase (Pending Approval).`, { lead_id: saved.id, business_name: name }, saved.id);
+        // Step E: Save Lead Research Evidence
+        await saveLeadResearch({
+          lead_id: savedLead.id,
+          source_urls: research.source_urls,
+          website_checked_url: audit.checkedUrl,
+          website_check_result: audit.statusLabel,
+          website_check_details: audit.details,
+          growth_signals: research.growth_signals,
+          social_profiles: research.social_profiles,
+          contact_evidence: research.contact_evidence,
+          raw_research_notes: research.research_notes,
+        });
 
-        await sendHitlApprovalEmail(saved, token);
+        // Step F: Save Outreach Draft
+        await saveOutreachDraft({
+          lead_id: savedLead.id,
+          version: 1,
+          subject: pitch.subject,
+          body: pitch.body,
+          offer_service: settings.target_offer,
+          personalization_hooks: {
+            observations: research.growth_signals.observations,
+            confidence_score: research.confidence_score,
+          },
+          ai_model: pitch.modelUsed,
+          status: 'pending_approval',
+        });
+
+        qualifiedLeads.push(savedLead);
+        qualifiedCount++;
+
+        await insertLog(
+          'draft',
+          'success',
+          `Generated personalized pitch for '${name}' in ${candidate.city} (${pitch.modelUsed}). Saved to pipeline [Status: ${leadStatus}].`,
+          { lead_id: savedLead.id, business: name, score: research.confidence_score, status: leadStatus },
+          savedLead.id,
+          run.id
+        );
+
+        // Step G: Send HITL review email to admin ONLY ONCE per newly qualified business
+        if (hasContactEmail && settings.require_manual_approval) {
+          await sendHitlApprovalEmail(savedLead, token);
+        }
+      } catch (leadError: any) {
+        errorCount++;
+        await insertLog(
+          'error',
+          'error',
+          `Failed processing candidate '${name}': ${leadError.message}`,
+          { business: name, error: leadError.message },
+          undefined,
+          run.id
+        );
       }
     }
 
-    const summary = `Discovery cycle complete. ${qualifiedLeads.length} businesses without website saved to Supabase and sent for HITL approval.`;
-    await insertLog('success', 'success', summary, { qualified_count: qualifiedLeads.length, city });
+    const durationMs = Date.now() - startTime;
+    const summaryMsg = `Discovery cycle complete for ${city}. ${qualifiedCount} qualified businesses without website saved to Supabase (${missingEmailCount} awaiting contact discovery, ${qualifiedCount - missingEmailCount} dispatched for HITL approval).`;
+
+    await updateAutomationRun(run.id, {
+      status: 'completed',
+      discovered_count: discoveredCount,
+      qualified_count: qualifiedCount,
+      drafted_count: qualifiedCount,
+      error_count: errorCount,
+      duration_ms: durationMs,
+      summary: summaryMsg,
+      completed_at: new Date().toISOString(),
+    });
+
+    await insertLog(
+      'success',
+      'success',
+      summaryMsg,
+      {
+        run_id: run.id,
+        duration_ms: durationMs,
+        discovered: discoveredCount,
+        qualified: qualifiedCount,
+        missing_email: missingEmailCount,
+      },
+      undefined,
+      run.id
+    );
 
     return {
       status: 'success',
-      message: summary,
-      leads_processed: candidates.length,
-      leads_qualified: qualifiedLeads.length,
-      leads: qualifiedLeads
+      message: summaryMsg,
+      run_id: run.id,
+      leads_discovered: discoveredCount,
+      leads_qualified: qualifiedCount,
+      leads_missing_email: missingEmailCount,
+      leads: qualifiedLeads,
     };
-  } catch (e: any) {
-    const errMsg = `Agent discovery cycle failed: ${e.message}`;
-    await insertLog('error', 'error', errMsg, { error: e.message });
-    return { status: 'error', message: errMsg };
+  } catch (cycleError: any) {
+    const durationMs = Date.now() - startTime;
+    const errMsg = `Autonomous discovery cycle failed: ${cycleError.message}`;
+
+    await updateAutomationRun(run.id, {
+      status: 'failed',
+      discovered_count: discoveredCount,
+      qualified_count: qualifiedCount,
+      error_count: errorCount + 1,
+      duration_ms: durationMs,
+      summary: errMsg,
+      error_details: { message: cycleError.message, stack: cycleError.stack },
+      completed_at: new Date().toISOString(),
+    });
+
+    await insertLog('error', 'error', errMsg, { error: cycleError.message }, undefined, run.id);
+
+    return {
+      status: 'error',
+      message: errMsg,
+      run_id: run.id,
+    };
   }
 }

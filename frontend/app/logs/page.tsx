@@ -189,51 +189,99 @@ export default function LogsPage() {
             No system activity logs found matching the filter.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-white/5 bg-slate-900/40 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  <th className="py-2.5 px-4 w-40">Timestamp</th>
-                  <th className="py-2.5 px-4 w-32">Step</th>
-                  <th className="py-2.5 px-4 w-24">Status</th>
-                  <th className="py-2.5 px-4">Message</th>
-                  <th className="py-2.5 px-4 text-right w-20">Details</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/[0.03] text-xs font-mono">
-                {filteredLogs.map((log) => (
-                  <tr key={log.id} className="hover:bg-white/[0.02] transition-colors">
-                    <td className="py-2.5 px-4 text-slate-400 text-[11px] whitespace-nowrap">
-                      {new Date(log.created_at).toLocaleTimeString()} · {new Date(log.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                    </td>
-                    <td className="py-2.5 px-4">
-                      <div className="flex items-center gap-1.5 font-medium text-slate-200">
-                        {getStepIcon(log.step)}
-                        <span className="capitalize">{log.step.replace('_', ' ')}</span>
-                      </div>
-                    </td>
-                    <td className="py-2.5 px-4">
+          <>
+            {/* Mobile Cards View (Zero horizontal scroll) */}
+            <div className="block md:hidden divide-y divide-white/[0.04]">
+              {filteredLogs.map((log) => (
+                <div key={log.id} className="p-3.5 space-y-2">
+                  <div className="flex items-center justify-between text-[11px] text-slate-400">
+                    <div className="flex items-center gap-1.5 font-medium text-slate-200">
+                      {getStepIcon(log.step)}
+                      <span className="capitalize">{log.step.replace('_', ' ')}</span>
+                    </div>
+                    <span>
+                      {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+
+                  <div className="flex items-start gap-2">
+                    <div className="shrink-0 pt-0.5">
                       {getStatusBadge(log.status)}
-                    </td>
-                    <td className="py-2.5 px-4 text-slate-300 font-sans text-xs">
+                    </div>
+                    <p className="text-xs text-slate-200 font-sans flex-1">
                       {log.message}
-                    </td>
-                    <td className="py-2.5 px-4 text-right">
-                      {log.details && Object.keys(log.details).length > 0 && (
-                        <button
-                          onClick={() => setSelectedLog(log)}
-                          className="p-1 rounded text-slate-400 hover:text-white hover:bg-white/10"
-                          title="View JSON Payload"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </td>
+                    </p>
+                  </div>
+
+                  {log.details && Object.keys(log.details).length > 0 && (
+                    <div className="pt-1 flex justify-end">
+                      <button
+                        onClick={() => setSelectedLog(log)}
+                        className="px-2 py-1 rounded text-[11px] font-mono text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 hover:bg-cyan-500/20 flex items-center gap-1"
+                      >
+                        <Eye className="w-3 h-3" />
+                        <span>Telemetry Payload</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop Table */}
+            <div className="hidden md:block w-full">
+              <table className="w-full table-fixed text-left border-collapse">
+                <colgroup>
+                  <col className="w-40" />
+                  <col className="w-32" />
+                  <col className="w-24" />
+                  <col />
+                  <col className="w-20" />
+                </colgroup>
+                <thead>
+                  <tr className="border-b border-white/5 bg-slate-900/40 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    <th className="py-2.5 px-4">Timestamp</th>
+                    <th className="py-2.5 px-4">Step</th>
+                    <th className="py-2.5 px-4">Status</th>
+                    <th className="py-2.5 px-4">Message</th>
+                    <th className="py-2.5 px-4 text-right">Details</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-white/[0.03] text-xs font-mono">
+                  {filteredLogs.map((log) => (
+                    <tr key={log.id} className="hover:bg-white/[0.02] transition-colors">
+                      <td className="py-2.5 px-4 text-slate-400 text-[11px] truncate">
+                        {new Date(log.created_at).toLocaleTimeString()} · {new Date(log.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                      </td>
+                      <td className="py-2.5 px-4 truncate">
+                        <div className="flex items-center gap-1.5 font-medium text-slate-200 truncate">
+                          {getStepIcon(log.step)}
+                          <span className="capitalize truncate">{log.step.replace('_', ' ')}</span>
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-4">
+                        {getStatusBadge(log.status)}
+                      </td>
+                      <td className="py-2.5 px-4 text-slate-300 font-sans text-xs">
+                        {log.message}
+                      </td>
+                      <td className="py-2.5 px-4 text-right">
+                        {log.details && Object.keys(log.details).length > 0 && (
+                          <button
+                            onClick={() => setSelectedLog(log)}
+                            className="p-1 rounded text-slate-400 hover:text-white hover:bg-white/10"
+                            title="View JSON Payload"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
 

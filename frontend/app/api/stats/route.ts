@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getStats } from '@/lib/server/supabase';
+import { getDashboardStats } from '@/lib/server/supabase';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  const stats = await getStats();
+  const stats = await getDashboardStats();
   return NextResponse.json(stats);
 }
