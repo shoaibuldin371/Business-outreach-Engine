@@ -17,7 +17,7 @@ import {
 import { verifyBusinessWebsite } from './verification';
 import { conductBusinessResearch } from './research';
 import { generatePersonalizedPitch } from './ai';
-import { sendHitlApprovalEmail } from './email';
+import { sendHitlApprovalEmail, verifyDomainHasMx } from './email';
 import { BusinessLead } from './types';
 
 export interface CycleResult {
@@ -59,11 +59,13 @@ export async function runDiscoveryCycle(
     };
   }
 
-  // Dynamic Worldwide Hub Selection if no custom city passed or if default Dallas is passed
-  const isDefaultCity = !customCity || customCity.trim().toLowerCase() === 'dallas, tx';
+  // Dynamic Worldwide Hub & High-Growth Category Selection (100% Autopilot)
+  const isDefaultCity = !customCity || !customCity.trim() || customCity.trim().toLowerCase() === 'dallas, tx';
   const hub = isDefaultCity ? getRandomWorldwideHub() : null;
-  const city = customCity && !isDefaultCity ? customCity : (hub ? `${hub.city}, ${hub.country}` : 'London, United Kingdom');
-  const category = customCategory && customCategory !== 'dentists' ? customCategory : getRandomWorldwideCategory();
+  const city = customCity && !isDefaultCity ? customCity.trim() : (hub ? `${hub.city}, ${hub.country}` : 'London, United Kingdom');
+  const category = customCategory && customCategory.trim() && customCategory.trim().toLowerCase() !== 'dentists' 
+    ? customCategory.trim() 
+    : getRandomWorldwideCategory();
   const count = customCount || settings.batch_size || 5;
 
   const run = await createAutomationRun(triggerType, category, city, count);
@@ -164,8 +166,26 @@ export async function runDiscoveryCycle(
           senderBusiness: settings.sender_business,
         });
 
-        // Determine lead status
-        const hasContactEmail = Boolean(research.public_email && research.public_email.trim());
+        // Determine lead status with DNS MX Pre-flight Verification
+        let validContactEmail = '';
+        if (research.public_email && research.public_email.trim()) {
+          const candidateEmail = research.public_email.trim();
+          const hasMx = await verifyDomainHasMx(candidateEmail);
+          if (hasMx) {
+            validContactEmail = candidateEmail;
+          } else {
+            await insertLog(
+              'explore',
+              'warning',
+              `Email '${candidateEmail}' for '${name}' discarded: domain has no active MX mail records. Lead saved for manual verification.`,
+              { business: name, email: candidateEmail },
+              undefined,
+              run.id
+            );
+          }
+        }
+
+        const hasContactEmail = Boolean(validContactEmail);
         const leadStatus = hasContactEmail ? 'pending_approval' : 'missing_contact';
         if (!hasContactEmail) missingEmailCount++;
 
@@ -179,7 +199,7 @@ export async function runDiscoveryCycle(
           country: candidate.country || 'Worldwide',
           address: candidate.address,
           phone: research.public_phone || candidate.phone || '',
-          email: research.public_email || '',
+          email: validContactEmail,
           website: audit.checkedUrl || '',
           website_status: audit.status,
           confidence_score: research.confidence_score,

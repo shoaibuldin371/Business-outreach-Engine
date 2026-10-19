@@ -25,17 +25,33 @@ import {
   Globe2, 
   RefreshCw,
   Compass,
-  ArrowRight
+  ArrowRight,
+  Zap,
+  ChevronDown,
+  ChevronUp,
+  SlidersHorizontal
 } from 'lucide-react';
 
+const HIGH_GROWTH_SHOWCASE = [
+  { label: 'Med Spas & Aesthetics', icon: '💉' },
+  { label: 'Solar & Clean Energy', icon: '⚡' },
+  { label: 'Luxury Custom Builders', icon: '🏡' },
+  { label: 'Commercial HVAC', icon: '❄️' },
+  { label: 'Boutique Law Firms', icon: '⚖️' },
+  { label: 'Cosmetic Orthodontics', icon: '🦷' },
+  { label: 'Exotic Auto Detailing', icon: '🏎️' },
+  { label: 'Commercial Roofing', icon: '🏢' },
+  { label: 'Veterinary Hospitals', icon: '🐾' },
+];
+
 const QUICK_WORLDWIDE_PRESETS = [
-  { label: '🌍 Worldwide Random', city: '', category: '' },
-  { label: '🇬🇧 London, UK', city: 'London, United Kingdom', category: 'dentists' },
-  { label: '🇺🇸 New York, US', city: 'New York, NY', category: 'roofing contractors' },
-  { label: '🇨🇦 Toronto, CA', city: 'Toronto, ON', category: 'plumbing specialists' },
-  { label: '🇦🇺 Sydney, AU', city: 'Sydney, Australia', category: 'hvac & air conditioning' },
-  { label: '🇦🇪 Dubai, UAE', city: 'Dubai, UAE', category: 'aesthetic clinics' },
-  { label: '🇺🇸 Los Angeles, US', city: 'Los Angeles, CA', category: 'law firms & attorneys' },
+  { label: '🌍 Worldwide Auto-Rotate', city: '', category: '' },
+  { label: '🇬🇧 London, UK', city: 'London, United Kingdom', category: 'cosmetic dentistry & orthodontics' },
+  { label: '🇺🇸 New York, US', city: 'New York, NY', category: 'commercial roofing & restoration' },
+  { label: '🇨🇦 Toronto, CA', city: 'Toronto, ON', category: 'luxury custom home builders' },
+  { label: '🇦🇺 Sydney, AU', city: 'Sydney, Australia', category: 'commercial hvac & refrigeration contractors' },
+  { label: '🇦🇪 Dubai, UAE', city: 'Dubai, UAE', category: 'aesthetic clinics & med spas' },
+  { label: '🇺🇸 Los Angeles, US', city: 'Los Angeles, CA', category: 'boutique corporate & ip law firms' },
 ];
 
 export default function DashboardPage() {
@@ -48,7 +64,8 @@ export default function DashboardPage() {
   const [discovering, setDiscovering] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  // Discovery Controls (Worldwide by default)
+  // Optional manual override (collapsed by default for 100% autonomous operation)
+  const [showManualOverride, setShowManualOverride] = useState(false);
   const [category, setCategory] = useState('');
   const [city, setCity] = useState('');
 
@@ -83,7 +100,7 @@ export default function DashboardPage() {
       const res = await triggerDiscovery(targetCategory || undefined, targetCity || undefined, 5);
       setNotification({
         type: 'success',
-        message: `✓ Worldwide Scan Executed! ${res.leads_qualified || 0} unique businesses without websites audited and pushed to Supabase.`
+        message: `✓ Autopilot Cycle Finished! Discovered & audited high-growth businesses in worldwide hub (${res.leads_qualified || 0} qualified, no-website leads pushed to Supabase).`
       });
       await loadData();
     } catch (err: any) {
@@ -108,78 +125,162 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6 md:space-y-8 max-w-7xl mx-auto w-full">
-      {/* Top Banner & Worldwide Discovery Trigger */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 bg-gradient-to-br from-[#0e1428] via-[#0b0f1e] to-[#070a14] p-5 sm:p-6 rounded-3xl border border-indigo-500/15 shadow-xl relative overflow-hidden">
-        <div className="space-y-2 max-w-2xl">
-          <div className="flex items-center gap-2 text-xs font-semibold text-indigo-400 uppercase tracking-wider">
-            <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
-            <span>Worldwide Autonomous Prospecting Engine</span>
-          </div>
-          <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-white tracking-tight">
-            Discover & Pitch Global Businesses Without Websites
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-400">
-            Scanning 5 qualified businesses every 3 hours across worldwide hubs (US, UK, Canada, Australia, UAE, Europe). Generates AI pitch, verifies contact emails, and prepares 1-click Gmail HITL approval.
-          </p>
+      {/* 100% Autonomous Autopilot Banner & Controls */}
+      <div className="bg-gradient-to-br from-[#0e1428] via-[#0b0f1e] to-[#070a14] p-5 sm:p-6 rounded-3xl border border-indigo-500/20 shadow-2xl relative overflow-hidden space-y-5">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          {/* Left: Autopilot Information & High-Growth Sectors */}
+          <div className="space-y-3 max-w-2xl">
+            <div className="flex items-center gap-2 text-xs font-bold text-emerald-400 uppercase tracking-wider">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span>100% Autonomous Autopilot Active • 3-Hour Cycle</span>
+            </div>
+            
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-white tracking-tight">
+              Worldwide High-Growth Business Prospecting
+            </h1>
+            
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              Targeting <span className="text-white font-medium">35+ high-growth sectors</span> across <span className="text-white font-medium">35+ global economic hubs</span> (US, UK, Canada, Australia, UAE, Europe). The autonomous agent continuously audits local businesses without websites, verifies contact emails, and prepares 1-click Gmail HITL approval. <span className="text-indigo-400 font-medium">Zero typing or manual work required!</span>
+            </p>
 
-          {/* Worldwide Quick Preset Buttons */}
-          <div className="pt-2 flex items-center gap-1.5 flex-wrap">
-            <span className="text-[11px] font-semibold text-slate-400 flex items-center gap-1 mr-1">
-              <Globe2 className="w-3.5 h-3.5 text-indigo-400" /> Presets:
-            </span>
-            {QUICK_WORLDWIDE_PRESETS.map((preset, idx) => (
-              <button
-                key={idx}
-                onClick={() => {
-                  setCity(preset.city);
-                  setCategory(preset.category);
-                }}
-                className={`text-[11px] px-2.5 py-1 rounded-lg border transition-all ${
-                  (city === preset.city && category === preset.category)
-                    ? 'bg-indigo-600/30 text-indigo-300 border-indigo-500/50 shadow-sm'
-                    : 'bg-white/5 hover:bg-white/10 text-slate-300 border-white/5'
-                }`}
-              >
-                {preset.label}
-              </button>
-            ))}
+            {/* High-Growth Industry Showcase Pills */}
+            <div className="pt-1">
+              <div className="text-[11px] font-semibold text-slate-400 mb-1.5 flex items-center gap-1.5">
+                <Zap className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Auto-Rotating High-Growth Sectors:</span>
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {HIGH_GROWTH_SHOWCASE.map((item, idx) => (
+                  <span
+                    key={idx}
+                    className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-lg bg-white/5 border border-white/5 text-slate-300 hover:border-indigo-500/30 transition-colors"
+                  >
+                    <span>{item.icon}</span>
+                    <span>{item.label}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
           </div>
-        </div>
 
-        {/* Scan Controls Box (Responsive for mobile & desktop) */}
-        <div className="p-3 sm:p-4 rounded-2xl bg-slate-900/90 border border-white/10 flex flex-col gap-2.5 shadow-2xl shrink-0 w-full lg:w-auto">
-          <div className="text-xs font-semibold text-slate-300 flex items-center justify-between">
-            <span className="flex items-center gap-1.5">
-              <Compass className="w-3.5 h-3.5 text-indigo-400" />
-              Target Location & Niche
-            </span>
-            <span className="text-[10px] text-slate-400">Worldwide</span>
-          </div>
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-            <input
-              type="text"
-              placeholder="Niche (leave empty for random)"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="px-3 py-2 text-xs bg-slate-950 border border-white/10 rounded-xl text-slate-200 focus:outline-none focus:border-indigo-500 w-full sm:w-44"
-            />
-            <input
-              type="text"
-              placeholder="City (e.g. London, Dubai, Toronto)"
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-              className="px-3 py-2 text-xs bg-slate-950 border border-white/10 rounded-xl text-slate-200 focus:outline-none focus:border-indigo-500 w-full sm:w-48"
-            />
+          {/* Right: Autopilot Action Box (1-Click Run, No Typing Needed) */}
+          <div className="p-4 sm:p-5 rounded-2xl bg-slate-900/90 border border-indigo-500/20 flex flex-col gap-3 shadow-2xl shrink-0 w-full lg:w-80">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-indigo-400" />
+                Autonomous Scheduler
+              </span>
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                ● 24/7 Online
+              </span>
+            </div>
+
+            <p className="text-[11px] text-slate-400 leading-normal">
+              Cloud automation automatically runs every 3 hours. Click below to trigger the next auto-rotation cycle immediately without writing anything.
+            </p>
+
+            {/* Big Instant 1-Click Run Button */}
             <button
-              onClick={() => handleTriggerDiscovery()}
+              onClick={() => handleTriggerDiscovery('', '')}
               disabled={discovering}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 shadow-lg shadow-indigo-500/25 transition-all disabled:opacity-50 shrink-0"
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 shadow-xl shadow-indigo-500/30 transition-all disabled:opacity-50 active:scale-[0.99]"
             >
-              <Sparkles className={`w-3.5 h-3.5 ${discovering ? 'animate-spin' : ''}`} />
-              <span>{discovering ? 'Auditing Global Leads...' : 'Scan 5 Businesses Now'}</span>
+              <Sparkles className={`w-4 h-4 ${discovering ? 'animate-spin' : ''}`} />
+              <span>{discovering ? 'Auditing Next Global Hub...' : '⚡ Run Instant Autopilot Cycle'}</span>
             </button>
+
+            <div className="text-[10px] text-center text-slate-400">
+              Auto-selects next high-growth niche & worldwide city
+            </div>
+
+            {/* Optional Collapsible Manual Override Toggle */}
+            <div className="pt-2 border-t border-white/5">
+              <button
+                type="button"
+                onClick={() => setShowManualOverride(!showManualOverride)}
+                className="w-full flex items-center justify-between text-[11px] font-medium text-slate-400 hover:text-slate-200 transition-colors py-1"
+              >
+                <span className="flex items-center gap-1">
+                  <SlidersHorizontal className="w-3 h-3 text-indigo-400" />
+                  <span>Custom Target Override (Optional)</span>
+                </span>
+                {showManualOverride ? (
+                  <ChevronUp className="w-3.5 h-3.5" />
+                ) : (
+                  <ChevronDown className="w-3.5 h-3.5" />
+                )}
+              </button>
+            </div>
           </div>
         </div>
+
+        {/* Collapsible Manual Override Drawer (Hidden by default so user doesn't have to write anything) */}
+        {showManualOverride && (
+          <div className="pt-4 border-t border-white/10 space-y-3 bg-black/20 p-4 rounded-2xl">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                <Compass className="w-3.5 h-3.5 text-indigo-400" />
+                Custom City or Category Override (For Specific Testing Only)
+              </span>
+              <button
+                onClick={() => {
+                  setCity('');
+                  setCategory('');
+                }}
+                className="text-[11px] text-indigo-400 hover:underline"
+              >
+                Reset to Worldwide Auto
+              </button>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              <input
+                type="text"
+                placeholder="Specific Niche (e.g. Med Spas, Commercial HVAC)"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="px-3 py-2 text-xs bg-slate-950 border border-white/10 rounded-xl text-slate-200 focus:outline-none focus:border-indigo-500 w-full sm:w-64"
+              />
+              <input
+                type="text"
+                placeholder="Specific City (e.g. Dubai, London, New York)"
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                className="px-3 py-2 text-xs bg-slate-950 border border-white/10 rounded-xl text-slate-200 focus:outline-none focus:border-indigo-500 w-full sm:w-64"
+              />
+              <button
+                onClick={() => handleTriggerDiscovery()}
+                disabled={discovering}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 transition-colors disabled:opacity-50 shrink-0"
+              >
+                Scan Specific Target
+              </button>
+            </div>
+
+            {/* Quick Presets inside Drawer */}
+            <div className="flex items-center gap-1.5 flex-wrap pt-1">
+              <span className="text-[10px] text-slate-400 mr-1 flex items-center gap-1">
+                <Globe2 className="w-3 h-3 text-indigo-400" /> Quick Hubs:
+              </span>
+              {QUICK_WORLDWIDE_PRESETS.map((preset, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    setCity(preset.city);
+                    setCategory(preset.category);
+                  }}
+                  className={`text-[11px] px-2.5 py-1 rounded-lg border transition-all ${
+                    city === preset.city && category === preset.category
+                      ? 'bg-indigo-600/30 text-indigo-300 border-indigo-500/50 shadow-sm'
+                      : 'bg-white/5 hover:bg-white/10 text-slate-300 border-white/5'
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {notification && (

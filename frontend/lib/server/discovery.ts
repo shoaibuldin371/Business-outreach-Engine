@@ -24,40 +24,91 @@ export interface WorldwideHub {
 }
 
 export const WORLDWIDE_HUBS: WorldwideHub[] = [
-  { city: 'London', country: 'United Kingdom', region: 'Europe', phonePrefix: '+44 20 7946' },
+  // North America
   { city: 'New York, NY', country: 'United States', region: 'North America', phonePrefix: '+1 (212) 555-' },
-  { city: 'Toronto, ON', country: 'Canada', region: 'North America', phonePrefix: '+1 (416) 555-' },
-  { city: 'Sydney', country: 'Australia', region: 'Oceania', phonePrefix: '+61 2 9555 ' },
-  { city: 'Dubai', country: 'United Arab Emirates', region: 'Middle East', phonePrefix: '+971 4 355 ' },
-  { city: 'Manchester', country: 'United Kingdom', region: 'Europe', phonePrefix: '+44 161 496' },
   { city: 'Los Angeles, CA', country: 'United States', region: 'North America', phonePrefix: '+1 (310) 555-' },
   { city: 'Chicago, IL', country: 'United States', region: 'North America', phonePrefix: '+1 (312) 555-' },
-  { city: 'Melbourne', country: 'Australia', region: 'Oceania', phonePrefix: '+61 3 9555 ' },
-  { city: 'Vancouver, BC', country: 'Canada', region: 'North America', phonePrefix: '+1 (604) 555-' },
   { city: 'Miami, FL', country: 'United States', region: 'North America', phonePrefix: '+1 (305) 555-' },
-  { city: 'Dublin', country: 'Ireland', region: 'Europe', phonePrefix: '+353 1 496 ' },
-  { city: 'Berlin', country: 'Germany', region: 'Europe', phonePrefix: '+49 30 2055' },
+  { city: 'Dallas, TX', country: 'United States', region: 'North America', phonePrefix: '+1 (214) 555-' },
   { city: 'Austin, TX', country: 'United States', region: 'North America', phonePrefix: '+1 (512) 555-' },
   { city: 'Houston, TX', country: 'United States', region: 'North America', phonePrefix: '+1 (713) 555-' },
-  { city: 'Singapore', country: 'Singapore', region: 'Asia', phonePrefix: '+65 6555 ' },
-  { city: 'Brisbane', country: 'Australia', region: 'Oceania', phonePrefix: '+61 7 3555 ' },
+  { city: 'Seattle, WA', country: 'United States', region: 'North America', phonePrefix: '+1 (206) 555-' },
+  { city: 'Atlanta, GA', country: 'United States', region: 'North America', phonePrefix: '+1 (404) 555-' },
+  { city: 'Denver, CO', country: 'United States', region: 'North America', phonePrefix: '+1 (303) 555-' },
+  { city: 'San Diego, CA', country: 'United States', region: 'North America', phonePrefix: '+1 (619) 555-' },
+  { city: 'Phoenix, AZ', country: 'United States', region: 'North America', phonePrefix: '+1 (602) 555-' },
+  { city: 'Toronto, ON', country: 'Canada', region: 'North America', phonePrefix: '+1 (416) 555-' },
+  { city: 'Vancouver, BC', country: 'Canada', region: 'North America', phonePrefix: '+1 (604) 555-' },
+  { city: 'Montreal, QC', country: 'Canada', region: 'North America', phonePrefix: '+1 (514) 555-' },
+  { city: 'Calgary, AB', country: 'Canada', region: 'North America', phonePrefix: '+1 (403) 555-' },
+
+  // Europe & UK
+  { city: 'London', country: 'United Kingdom', region: 'Europe', phonePrefix: '+44 20 7946' },
+  { city: 'Manchester', country: 'United Kingdom', region: 'Europe', phonePrefix: '+44 161 496' },
   { city: 'Birmingham', country: 'United Kingdom', region: 'Europe', phonePrefix: '+44 121 496' },
-  { city: 'Dallas, TX', country: 'United States', region: 'North America', phonePrefix: '+1 (214) 555-' },
+  { city: 'Edinburgh', country: 'United Kingdom', region: 'Europe', phonePrefix: '+44 131 496' },
+  { city: 'Dublin', country: 'Ireland', region: 'Europe', phonePrefix: '+353 1 496 ' },
+  { city: 'Berlin', country: 'Germany', region: 'Europe', phonePrefix: '+49 30 2055' },
+  { city: 'Munich', country: 'Germany', region: 'Europe', phonePrefix: '+49 89 2055' },
+  { city: 'Amsterdam', country: 'Netherlands', region: 'Europe', phonePrefix: '+31 20 555 ' },
+  { city: 'Zurich', country: 'Switzerland', region: 'Europe', phonePrefix: '+41 44 555 ' },
+  { city: 'Paris', country: 'France', region: 'Europe', phonePrefix: '+33 1 42 68 ' },
+
+  // Oceania
+  { city: 'Sydney', country: 'Australia', region: 'Oceania', phonePrefix: '+61 2 9555 ' },
+  { city: 'Melbourne', country: 'Australia', region: 'Oceania', phonePrefix: '+61 3 9555 ' },
+  { city: 'Brisbane', country: 'Australia', region: 'Oceania', phonePrefix: '+61 7 3555 ' },
+  { city: 'Perth', country: 'Australia', region: 'Oceania', phonePrefix: '+61 8 9555 ' },
+  { city: 'Auckland', country: 'New Zealand', region: 'Oceania', phonePrefix: '+64 9 555 ' },
+
+  // Middle East & Asia
+  { city: 'Dubai', country: 'United Arab Emirates', region: 'Middle East', phonePrefix: '+971 4 355 ' },
+  { city: 'Abu Dhabi', country: 'United Arab Emirates', region: 'Middle East', phonePrefix: '+971 2 455 ' },
+  { city: 'Doha', country: 'Qatar', region: 'Middle East', phonePrefix: '+974 4455 ' },
+  { city: 'Riyadh', country: 'Saudi Arabia', region: 'Middle East', phonePrefix: '+966 11 555 ' },
+  { city: 'Singapore', country: 'Singapore', region: 'Asia', phonePrefix: '+65 6555 ' },
 ];
 
 export const WORLDWIDE_CATEGORIES = [
-  'dentists',
-  'roofing contractors',
-  'plumbing specialists',
-  'hvac & air conditioning',
-  'aesthetic clinics',
-  'law firms & attorneys',
-  'accounting & cpa firms',
-  'auto repair & detailing',
-  'luxury home remodeling',
-  'veterinary clinics',
-  'commercial cleaning',
-  'tree service & landscaping',
+  // High-Growth Aesthetics & Specialized Healthcare
+  'aesthetic clinics & med spas',
+  'cosmetic dentistry & orthodontics',
+  'dermatology & laser skin clinics',
+  'plastic & cosmetic surgeons',
+  'physical therapy & sports rehab clinics',
+  'veterinary specialty & surgical hospitals',
+  'chiropractic & regenerative wellness',
+
+  // High-Ticket Construction, Home & Commercial Services
+  'luxury custom home builders',
+  'commercial roofing & restoration',
+  'commercial hvac & refrigeration contractors',
+  'high-end interior design studios',
+  'landscape architecture & hardscaping',
+  'luxury swimming pool & outdoor living builders',
+  'solar energy & clean power installers',
+  'epoxy flooring & concrete polishing',
+  'commercial electrical & ev charging installers',
+  'smart home automation & audiovisual systems',
+  'commercial plumbing & mechanical engineers',
+
+  // High-Value Legal, Financial & Corporate Services
+  'boutique corporate & ip law firms',
+  'personal injury & trial attorneys',
+  'private wealth management & family offices',
+  'certified public accountants & tax advisors',
+  'commercial real estate brokerages',
+  'commercial insurance & risk advisors',
+
+  // High-Ticket Automotive, Marine & Industrial
+  'exotic auto detailing & ceramic coating',
+  'commercial fleet repair & maintenance',
+  'luxury yacht & marine services',
+  'precision cnc machining & fabrication',
+  'environmental remediation & disaster restoration',
+  'commercial janitorial & building maintenance',
+  'certified arborists & tree specialists',
+  'boutique event venues & luxury catering',
 ];
 
 export function getRandomWorldwideHub(): WorldwideHub {
@@ -328,7 +379,7 @@ function generateWorldwideCandidates(
       country: hub.country,
       address: `${100 + i * 15} High Street, ${hub.city}, ${hub.country}`,
       phone,
-      email: domainCandidate,
+      email: '', // Verified real public email discovered via Search API or left empty for manual contact entry
       website: '', // Intentionally missing dedicated website
       source: `Worldwide Directory Engine (${hub.region})`,
       rating: 4.6 + (i % 4) * 0.1,
