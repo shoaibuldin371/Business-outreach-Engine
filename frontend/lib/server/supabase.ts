@@ -1,15 +1,22 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-
 let client: SupabaseClient | null = null;
-if (supabaseUrl && supabaseKey && supabaseUrl.startsWith('http')) {
-  try {
-    client = createClient(supabaseUrl, supabaseKey);
-  } catch (e) {
-    console.warn('Failed to initialize Supabase client:', e);
+
+export function getClient(): SupabaseClient | null {
+  if (client) return client;
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const supabaseKey = process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+
+  if (supabaseUrl && supabaseKey && supabaseUrl.startsWith('http')) {
+    try {
+      client = createClient(supabaseUrl, supabaseKey, {
+        auth: { persistSession: false }
+      });
+      return client;
+    } catch (e) {
+      console.warn('Failed to initialize Supabase client:', e);
+    }
   }
+  return null;
 }
 
 // In-memory fallback for local dev or before Supabase keys are added
@@ -28,9 +35,10 @@ export async function insertLead(data: any) {
     ...data,
   };
 
-  if (client) {
+  const sb = getClient();
+  if (sb) {
     try {
-      const { data: res, error } = await client.from('leads').insert(lead).select().single();
+      const { data: res, error } = await sb.from('leads').insert(lead).select().single();
       if (!error && res) return res;
       console.warn('Supabase insertLead error, using local fallback:', error);
     } catch (e) {
@@ -43,14 +51,16 @@ export async function insertLead(data: any) {
 }
 
 export async function getLeads(status?: string, limit = 100) {
-  if (client) {
+  const sb = getClient();
+  if (sb) {
     try {
-      let query = client.from('leads').select('*').order('created_at', { ascending: false }).limit(limit);
+      let query = sb.from('leads').select('*').order('created_at', { ascending: false }).limit(limit);
       if (status && status !== 'all') {
         query = query.eq('status', status);
       }
       const { data, error } = await query;
       if (!error && data) return data;
+      console.warn('Supabase getLeads error:', error);
     } catch (e) {
       console.warn('Supabase getLeads error:', e);
     }
@@ -64,10 +74,12 @@ export async function getLeads(status?: string, limit = 100) {
 }
 
 export async function getLeadById(id: string) {
-  if (client) {
+  const sb = getClient();
+  if (sb) {
     try {
-      const { data, error } = await client.from('leads').select('*').eq('id', id).single();
+      const { data, error } = await sb.from('leads').select('*').eq('id', id).single();
       if (!error && data) return data;
+      console.warn('Supabase getLeadById error:', error);
     } catch (e) {
       console.warn('Supabase getLeadById error:', e);
     }
@@ -76,10 +88,12 @@ export async function getLeadById(id: string) {
 }
 
 export async function getLeadByToken(token: string) {
-  if (client) {
+  const sb = getClient();
+  if (sb) {
     try {
-      const { data, error } = await client.from('leads').select('*').eq('approval_token', token).single();
+      const { data, error } = await sb.from('leads').select('*').eq('approval_token', token).single();
       if (!error && data) return data;
+      console.warn('Supabase getLeadByToken error:', error);
     } catch (e) {
       console.warn('Supabase getLeadByToken error:', e);
     }
@@ -93,10 +107,12 @@ export async function updateLead(id: string, updates: any) {
     updated_at: new Date().toISOString(),
   };
 
-  if (client) {
+  const sb = getClient();
+  if (sb) {
     try {
-      const { data, error } = await client.from('leads').update(updated).eq('id', id).select().single();
+      const { data, error } = await sb.from('leads').update(updated).eq('id', id).select().single();
       if (!error && data) return data;
+      console.warn('Supabase updateLead error:', error);
     } catch (e) {
       console.warn('Supabase updateLead error:', e);
     }
@@ -121,10 +137,12 @@ export async function insertLog(step: string, status: string, message: string, d
     created_at: new Date().toISOString(),
   };
 
-  if (client) {
+  const sb = getClient();
+  if (sb) {
     try {
-      await client.from('logs').insert(logEntry);
-      return logEntry;
+      const { error } = await sb.from('logs').insert(logEntry);
+      if (!error) return logEntry;
+      console.warn('Supabase insertLog error:', error);
     } catch (e) {
       console.warn('Supabase insertLog error:', e);
     }
@@ -135,10 +153,12 @@ export async function insertLog(step: string, status: string, message: string, d
 }
 
 export async function getLogs(limit = 200) {
-  if (client) {
+  const sb = getClient();
+  if (sb) {
     try {
-      const { data, error } = await client.from('logs').select('*').order('created_at', { ascending: false }).limit(limit);
+      const { data, error } = await sb.from('logs').select('*').order('created_at', { ascending: false }).limit(limit);
       if (!error && data) return data;
+      console.warn('Supabase getLogs error:', error);
     } catch (e) {
       console.warn('Supabase getLogs error:', e);
     }
@@ -159,10 +179,12 @@ export async function insertSentEmail(leadId: string | null, recipient: string, 
     sent_at: new Date().toISOString(),
   };
 
-  if (client) {
+  const sb = getClient();
+  if (sb) {
     try {
-      const { data, error } = await client.from('sent_emails').insert(record).select().single();
+      const { data, error } = await sb.from('sent_emails').insert(record).select().single();
       if (!error && data) return data;
+      console.warn('Supabase insertSentEmail error:', error);
     } catch (e) {
       console.warn('Supabase insertSentEmail error:', e);
     }
@@ -173,6 +195,34 @@ export async function insertSentEmail(leadId: string | null, recipient: string, 
 }
 
 export async function getStats() {
+  const sb = getClient();
+  if (sb) {
+    try {
+      const { data: leads } = await sb.from('leads').select('*');
+      const { count: logsCount } = await sb.from('logs').select('*', { count: 'exact', head: true });
+      const { count: sentCount } = await sb.from('sent_emails').select('*', { count: 'exact', head: true });
+
+      const allLeads = leads || [];
+      const total = allLeads.length;
+      const noWeb = allLeads.filter(l => !l.website || l.website_status?.includes('No website') || l.website_status?.includes('Unreachable')).length;
+      const pending = allLeads.filter(l => l.status === 'pending_approval').length;
+      const rejected = allLeads.filter(l => l.status === 'rejected').length;
+      const sent = allLeads.filter(l => l.status === 'sent' || l.status === 'approved').length;
+
+      return {
+        total_leads: total,
+        no_website_count: noWeb,
+        pending_approval: pending,
+        rejected_count: rejected,
+        sent_count: sent,
+        total_logs: logsCount || 0,
+        total_sent_emails: sentCount || 0,
+      };
+    } catch (e) {
+      console.warn('Error fetching Supabase stats:', e);
+    }
+  }
+
   const leads = await getLeads('all', 1000);
   const logs = await getLogs(1000);
   const total = leads.length;
