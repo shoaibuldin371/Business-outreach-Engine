@@ -11,6 +11,7 @@ import {
   ShieldCheck, 
   Building2, 
   Sparkles,
+  CheckCheck,
   ExternalLink
 } from 'lucide-react';
 
@@ -18,7 +19,8 @@ export default function Sidebar() {
   const pathname = usePathname();
 
   const navItems = [
-    { label: 'Pipeline & Leads', href: '/', icon: LayoutDashboard },
+    { label: 'Active Pipeline', href: '/', icon: LayoutDashboard },
+    { label: 'Completed Outreach', href: '/completed', icon: CheckCheck },
     { label: 'System Logs', href: '/logs', icon: Terminal },
     { label: 'Custom Email', href: '/custom-email', icon: Send },
     { label: 'Settings', href: '/settings', icon: Settings },

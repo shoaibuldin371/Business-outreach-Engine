@@ -38,7 +38,7 @@ export default function LeadModal({ lead, onClose, onActionComplete }: LeadModal
     setFeedback(null);
     try {
       await directApprovalAction(lead.id, 'approve', isEditing ? subject : undefined, isEditing ? body : undefined);
-      setFeedback({ type: 'success', message: 'Approved! Pitch email dispatched to prospect and recorded in Supabase.' });
+      setFeedback({ type: 'success', message: '✓ Approved & Sent! Pitch delivered to prospect and moved to the Completed feature.' });
       setTimeout(() => {
         onActionComplete();
         onClose();

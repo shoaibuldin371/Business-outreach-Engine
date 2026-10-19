@@ -10,9 +10,15 @@ export async function GET(req: NextRequest) {
   }
   const { searchParams } = new URL(req.url);
   const status = searchParams.get('status');
-  let query = sb.from('leads').select('*').order('created_at', { ascending: false }).limit(100);
+  let query = sb.from('leads').select('*').order('created_at', { ascending: false }).limit(200);
   if (status && status !== 'all') {
-    query = query.eq('status', status);
+    if (status === 'completed' || status === 'sent') {
+      query = query.in('status', ['sent', 'approved']);
+    } else if (status === 'active') {
+      query = query.in('status', ['pending_approval', 'rejected', 'error']);
+    } else {
+      query = query.eq('status', status);
+    }
   }
   const { data, error } = await query;
   if (error) {

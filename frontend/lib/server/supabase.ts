@@ -56,7 +56,13 @@ export async function getLeads(status?: string, limit = 100) {
     try {
       let query = sb.from('leads').select('*').order('created_at', { ascending: false }).limit(limit);
       if (status && status !== 'all') {
-        query = query.eq('status', status);
+        if (status === 'completed' || status === 'sent') {
+          query = query.in('status', ['sent', 'approved']);
+        } else if (status === 'active') {
+          query = query.in('status', ['pending_approval', 'rejected', 'error']);
+        } else {
+          query = query.eq('status', status);
+        }
       }
       const { data, error } = await query;
       if (!error && data) return data;
@@ -68,7 +74,13 @@ export async function getLeads(status?: string, limit = 100) {
 
   let list = memLeads;
   if (status && status !== 'all') {
-    list = list.filter(l => l.status === status);
+    if (status === 'completed' || status === 'sent') {
+      list = list.filter(l => l.status === 'sent' || l.status === 'approved');
+    } else if (status === 'active') {
+      list = list.filter(l => l.status === 'pending_approval' || l.status === 'rejected' || l.status === 'error');
+    } else {
+      list = list.filter(l => l.status === status);
+    }
   }
   return list.slice(0, limit);
 }

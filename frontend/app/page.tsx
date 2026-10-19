@@ -31,7 +31,7 @@ import {
 export default function DashboardPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
-  const [activeFilter, setActiveFilter] = useState<string>('all');
+  const [activeFilter, setActiveFilter] = useState<string>('pending_approval');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(true);
@@ -182,13 +182,18 @@ export default function DashboardPage() {
           <div className="text-[11px] text-slate-400">Custom email ready</div>
         </div>
 
-        <div className="p-5 rounded-2xl bg-[#0e1322] border border-emerald-500/20 space-y-1">
-          <span className="text-xs font-medium text-emerald-400 flex items-center gap-1">
-            <CheckCircle2 className="w-3.5 h-3.5" /> Outreach Delivered
-          </span>
+        <Link href="/completed" className="p-5 rounded-2xl bg-[#0e1322] border border-emerald-500/20 space-y-1 block hover:bg-emerald-500/[0.04] transition-all group">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-emerald-400 flex items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5" /> Completed Outreach
+            </span>
+            <span className="text-[10px] font-semibold text-emerald-400 opacity-80 group-hover:opacity-100 flex items-center gap-0.5">
+              View Feature ➔
+            </span>
+          </div>
           <div className="text-2xl font-bold text-emerald-300">{stats?.sent_count || 0}</div>
-          <div className="text-[11px] text-slate-400">Logged in Supabase</div>
-        </div>
+          <div className="text-[11px] text-slate-400">Pitches sent & archived</div>
+        </Link>
       </div>
 
       {/* Main Content Area */}
@@ -197,10 +202,10 @@ export default function DashboardPage() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 pb-4">
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
             {[
-              { id: 'all', label: 'All Leads' },
-              { id: 'pending_approval', label: 'Pending Review (HITL)' },
-              { id: 'rejected', label: 'Rejected (Custom Ready)' },
-              { id: 'sent', label: 'Outreach Sent' },
+              { id: 'pending_approval', label: `Active Queue (${stats?.pending_approval || 0})` },
+              { id: 'rejected', label: `Rejected (${stats?.rejected_count || 0})` },
+              { id: 'completed', label: `Completed & Sent (${stats?.sent_count || 0})` },
+              { id: 'all', label: 'All Archive' },
             ].map(tab => (
               <button
                 key={tab.id}
@@ -236,8 +241,25 @@ export default function DashboardPage() {
           </div>
         ) : filteredLeads.length === 0 ? (
           <div className="py-16 text-center text-slate-400 text-xs space-y-3">
-            <p className="text-sm text-slate-300 font-medium">No leads match the current filter.</p>
-            <p>Click "Scan 5 Businesses Now" above to trigger discovery cycle immediately.</p>
+            <p className="text-sm text-slate-300 font-medium">
+              {activeFilter === 'pending_approval' 
+                ? 'All caught up! No leads are currently pending review.'
+                : 'No leads match the current filter.'}
+            </p>
+            <p className="max-w-md mx-auto">
+              {activeFilter === 'pending_approval'
+                ? 'Approved leads automatically move to the Completed feature. Click "Scan 5 Businesses Now" to fetch more leads, or check the Completed Outreach page.'
+                : 'Click "Scan 5 Businesses Now" above to trigger discovery cycle immediately.'}
+            </p>
+            {stats && stats.sent_count > 0 && activeFilter === 'pending_approval' && (
+              <Link
+                href="/completed"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-600/30 transition-colors"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                View {stats.sent_count} Completed Pitches
+              </Link>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
