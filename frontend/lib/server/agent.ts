@@ -30,13 +30,34 @@ export async function verifyWebsite(url: string): Promise<{ hasWebsite: boolean;
   }
 }
 
-export function generateColdPitch(name: string, category: string, city: string, phone = '') {
-  const first = name || 'Local Business';
-  const niche = category || 'local service';
-  const loc = city || 'your area';
+export function generateColdPitch(name: string, category: string, city: string) {
+  const businessName = (name || 'your team').trim();
+  const niche = (category || 'local services').toLowerCase();
+  const location = (city || 'your area').trim();
+  const myEmail = process.env.ADMIN_EMAIL || 'Mshoaibawan371@gmail.com';
 
-  const subject = `Website & local search visibility for ${first}`;
-  const body = `Hi ${first} Team,\n\nI came across your business while researching top ${niche} providers in ${loc}. You clearly have a strong local reputation.\n\nHowever, I noticed that ${first} doesn't currently have an active, mobile-optimized website online. Today, over 84% of local customers searching on Google Maps check for an instant service list and booking form before calling.\n\nI specialize in building sleek, high-performing websites specifically tailored for ${niche} businesses that:\n1. Turn local mobile visitors into immediate phone inquiries\n2. Establish instant trust against competitors\n3. Require zero technical maintenance on your end\n\nWould you be open to a quick 5-minute chat this week? I'd be glad to share a free wireframe and mockup specifically created for ${first}, with no obligation.\n\nBest regards,\nWeb Design & Growth Studio\nPhone: ${phone || '+1 (555) 019-2834'}\n\n(If you prefer not to receive website proposals, reply with "unsubscribe" and I will remove you immediately.)`;
+  const subject = `Partnership idea for ${businessName} — Web Presence & Client Acquisition`;
+  const body = `Dear ${businessName} Team,
+
+I came across your business while researching reputable ${niche} specialists in ${location}. Your positive customer feedback and local reputation really stood out.
+
+While reviewing your digital footprint, I noticed that ${businessName} does not currently have an active, dedicated website where potential clients can view your full services, explore customer testimonials, or send direct project inquiries.
+
+In today's market, over 84% of local customers search online before making a booking decision. I help businesses build sleek, fast, and modern websites tailored specifically for ${niche} providers, focused on:
+
+• Converting local searches into confirmed client appointments
+• Establishing strong credibility and standing out from competitors
+• Providing a frictionless mobile experience with zero technical hassle on your end
+
+Would you be open to a brief 5-minute conversation sometime this week? I would be delighted to share a tailored preliminary design concept for ${businessName}, completely free and with no obligation.
+
+Warm regards,
+
+Muhammad Shoaib
+Web Development & Growth Consultant
+Email: ${myEmail}
+
+(If this is not relevant to you at this time, please feel free to reply with "No thanks" and I will respectfully ensure no further follow-ups are sent.)`;
 
   return { subject, body };
 }

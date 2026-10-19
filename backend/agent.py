@@ -38,28 +38,28 @@ def generate_cold_pitch(name: str, category: str, city: str, phone: str = "") ->
     niche = (category or "local services").lower()
     loc = (city or "your area").strip()
 
-    subject = f"Website & local search visibility for {first}"
-    body = f"""Hi {first} Team,
+    subject = f"Partnership idea for {first} — Web Presence & Client Acquisition"
+    body = f"""Dear {first} Team,
 
-I came across your listing while researching top {niche} in {loc}. You clearly have a strong local reputation and great customer service.
+I came across your business while researching reputable {niche} specialists in {loc}. Your positive customer feedback and local reputation really stood out.
 
-However, I noticed that {first} doesn't currently have an official, mobile-optimized website active online. Today, over 84% of local customers searching on Google Maps and search look for an instant service menu, portfolio, and booking/contact form before calling.
+While reviewing your digital footprint, I noticed that {first} does not currently have an active, dedicated website where potential clients can view your full services, explore customer testimonials, or send direct project inquiries.
 
-I specialize in building sleek, high-performing websites specifically tailored for {niche} businesses that:
-1. Turn local mobile visitors into immediate phone calls & inquiries
-2. Establish instant trust and authority against competitors
-3. Are easy to maintain with zero technical hassle on your end
+In today's market, over 84% of local customers search online before making a booking decision. I help businesses build sleek, fast, and modern websites tailored specifically for {niche} providers, focused on:
 
-Would you be open to a quick 5-minute chat this week? I'd be glad to share a free wireframe and mockup specifically created for {first}, with no obligation.
+• Converting local searches into confirmed client appointments
+• Establishing strong credibility and standing out from competitors
+• Providing a frictionless mobile experience with zero technical hassle on your end
 
-Best regards,
+Would you be open to a brief 5-minute conversation sometime this week? I would be delighted to share a tailored preliminary design concept for {first}, completely free and with no obligation.
 
-{settings.SENDER_NAME}
-Web Design & Growth Studio
-Email: {settings.SENDER_EMAIL}
-Phone: {phone if phone else "+1 (555) 019-2834"}
+Warm regards,
 
-(If you prefer not to receive website ideas, reply with "unsubscribe" and I will remove you immediately.)"""
+Muhammad Shoaib
+Web Development & Growth Consultant
+Email: Mshoaibawan371@gmail.com
+
+(If this is not relevant to you at this time, please feel free to reply with "No thanks" and I will respectfully ensure no further follow-ups are sent.)"""
 
     return subject, body
 
