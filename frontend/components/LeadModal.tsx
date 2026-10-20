@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Lead, directApprovalAction } from '@/lib/api';
+import { Lead, directApprovalAction, patchLead } from '@/lib/api';
 import { 
   X, 
   CheckCircle2, 
@@ -28,6 +28,7 @@ export default function LeadModal({ lead, onClose, onActionComplete }: LeadModal
   if (!lead) return null;
 
   const [loading, setLoading] = useState(false);
+  const [recipientEmail, setRecipientEmail] = useState(lead.email || '');
   const [subject, setSubject] = useState(lead.email_subject || '');
   const [body, setBody] = useState(lead.email_body || '');
   const [isEditing, setIsEditing] = useState(false);
@@ -36,15 +37,26 @@ export default function LeadModal({ lead, onClose, onActionComplete }: LeadModal
   const handleApprove = async () => {
     setLoading(true);
     setFeedback(null);
+
+    const emailToSend = recipientEmail.trim();
+    if (!emailToSend) {
+      setFeedback({ type: 'error', message: 'Target business email is required to deliver the pitch. Please enter a valid email address below.' });
+      setLoading(false);
+      return;
+    }
+
     try {
+      if (emailToSend !== (lead.email || '').trim()) {
+        await patchLead(lead.id, { email: emailToSend, status: 'pending_approval' });
+      }
       await directApprovalAction(lead.id, 'approve', isEditing ? subject : undefined, isEditing ? body : undefined);
-      setFeedback({ type: 'success', message: '✓ Approved & Sent! Pitch delivered to prospect and moved to the Completed feature.' });
+      setFeedback({ type: 'success', message: '✓ Approved & Sent! Pitch delivered to prospect and moved to Completed Outreach.' });
       setTimeout(() => {
         onActionComplete();
         onClose();
       }, 1400);
     } catch (err: any) {
-      setFeedback({ type: 'error', message: err.message || 'Failed to approve' });
+      setFeedback({ type: 'error', message: err.message || 'Failed to approve and send' });
     } finally {
       setLoading(false);
     }
@@ -110,14 +122,35 @@ export default function LeadModal({ lead, onClose, onActionComplete }: LeadModal
           )}
 
           {/* Contact Intel */}
-          <div className="grid grid-cols-2 gap-3 p-3.5 rounded-xl bg-white/[0.02] border border-white/5 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-xl bg-white/[0.02] border border-white/5 text-xs">
             <div className="space-y-1">
               <span className="text-slate-400 flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-slate-400" /> Phone:</span>
-              <p className="font-semibold text-slate-200">{lead.phone || 'None listed'}</p>
+              <p className="font-semibold text-slate-200">
+                {lead.phone ? (
+                  <a href={`tel:${lead.phone}`} className="text-indigo-400 hover:underline">
+                    {lead.phone}
+                  </a>
+                ) : (
+                  'None listed'
+                )}
+              </p>
             </div>
             <div className="space-y-1">
-              <span className="text-slate-400 flex items-center gap-1.5"><Mail className="w-3.5 h-3.5 text-slate-400" /> Target Email:</span>
-              <p className="font-semibold text-slate-200 truncate">{lead.email || 'None on record'}</p>
+              <span className="text-slate-400 flex items-center gap-1.5">
+                <Mail className="w-3.5 h-3.5 text-slate-400" /> Target Email (Prospect Recipient):
+              </span>
+              <input
+                type="email"
+                value={recipientEmail}
+                onChange={(e) => setRecipientEmail(e.target.value)}
+                placeholder="Enter verified business email (e.g. info@business.com)"
+                className="w-full px-2.5 py-1.5 text-xs font-mono bg-slate-900 border border-white/10 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500 placeholder:text-slate-400"
+              />
+              {!lead.email && (
+                <span className="text-[10px] text-amber-400 flex items-center gap-1">
+                  ⚠️ Discovered via OSM. Enter email above to deliver proposal pitch directly.
+                </span>
+              )}
             </div>
           </div>
 

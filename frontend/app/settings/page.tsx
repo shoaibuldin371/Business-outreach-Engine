@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { fetchSettings, updateSettings } from '@/lib/api';
+import DatabaseSettingCard from '@/components/DatabaseSettingCard';
 import { 
   Settings, 
   ShieldCheck, 
@@ -65,13 +66,13 @@ export default function SettingsPage() {
       <div>
         <div className="flex items-center gap-2 text-xs font-semibold text-indigo-400 uppercase tracking-wider mb-1">
           <Settings className="w-4 h-4" />
-          Engine Configuration
+          Engine Configuration & Storage
         </div>
         <h1 className="text-2xl font-extrabold text-white tracking-tight">
-          System Settings & Deployment Integrations
+          System Settings, Database & Deployment
         </h1>
         <p className="text-sm text-slate-400 mt-1">
-          Configure default targeting, Human-In-The-Loop Gmail notification address, and monitor deployment health.
+          Configure default worldwide targeting, reviewer Gmail notification address, and manage Supabase database storage tables.
         </p>
       </div>
 
@@ -85,39 +86,25 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {/* Database Engine & Central Store Settings */}
+      <DatabaseSettingCard />
+
       {/* Integration Status Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Backend & Railway */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Next.js Full Stack on Vercel */}
         <div className="p-5 rounded-2xl bg-[#0b0f1d] border border-white/5 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-300 flex items-center gap-2">
               <Server className="w-4 h-4 text-indigo-400" />
-              Backend (Railway)
+              Application Deployment (Vercel)
             </span>
             <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-400">
-              <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Online
+              <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Production Live
             </span>
           </div>
           <div className="text-xs text-slate-400 space-y-1">
-            <p>Runs FastAPI, APScheduler (3 hours), and Gmail action webhooks.</p>
-            <p className="font-mono text-[11px] text-slate-300 truncate">{settings?.backend_url || 'http://localhost:8000'}</p>
-          </div>
-        </div>
-
-        {/* Supabase */}
-        <div className="p-5 rounded-2xl bg-[#0b0f1d] border border-white/5 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-300 flex items-center gap-2">
-              <Database className="w-4 h-4 text-emerald-400" />
-              Supabase DB
-            </span>
-            <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-400">
-              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-              {settings?.supabase_configured ? 'Connected' : 'Active (Local Sync)'}
-            </span>
-          </div>
-          <div className="text-xs text-slate-400 space-y-1">
-            <p>Syncs `leads`, `logs`, and `sent_emails` tables continuously.</p>
+            <p>Next.js 14 App Router, Serverless Edge API Routes, and RBAC Authentication Middleware.</p>
+            <p className="font-mono text-[11px] text-slate-300 truncate">https://business-outreach-engine.vercel.app</p>
           </div>
         </div>
 
@@ -128,10 +115,10 @@ export default function SettingsPage() {
               <Clock className="w-4 h-4 text-amber-400" />
               Automation Cycle
             </span>
-            <span className="text-[11px] font-bold text-amber-400">Every 3 Hours</span>
+            <span className="text-[11px] font-bold text-amber-400">Continuous Autopilot</span>
           </div>
           <div className="text-xs text-slate-400 space-y-1">
-            <p>Scans 5 local businesses, checks for missing websites, drafts pitch, and emails Gmail.</p>
+            <p>Scans real businesses via OpenStreetMap Nominatim, verifies DNS MX records, and drafts personalized proposals.</p>
           </div>
         </div>
       </div>

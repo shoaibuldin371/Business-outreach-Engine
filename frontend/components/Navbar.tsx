@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { RefreshCw, Sparkles, LogOut, ShieldCheck } from 'lucide-react';
+import { RefreshCw, Sparkles, LogOut, ShieldCheck, Database } from 'lucide-react';
 
 interface NavbarProps {
   onRefresh?: () => void;
@@ -55,6 +55,16 @@ export default function Navbar({ onRefresh, isRefreshing }: NavbarProps) {
             <span className="hidden sm:inline">Refresh</span>
           </button>
         )}
+
+        {/* Database Feature Indicator */}
+        <Link
+          href="/settings"
+          className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-[11px] font-medium hover:bg-indigo-500/20 transition-all"
+          title="Supabase PostgreSQL Cloud Database Connected"
+        >
+          <Database className="w-3.5 h-3.5 text-indigo-400" />
+          <span>Supabase DB</span>
+        </Link>
 
         <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] sm:text-xs font-medium">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>

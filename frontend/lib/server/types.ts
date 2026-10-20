@@ -179,8 +179,25 @@ export interface DashboardStats {
   sent_count: number;
   rejected_count: number;
   missing_contact_count: number;
+  active_pipelines_count: number;
   total_logs: number;
   total_sent_emails: number;
   automation_active: boolean;
   last_run?: AutomationRun | null;
+  database?: {
+    engine: string;
+    feature_name: string;
+    url: string;
+    host: string;
+    is_connected: boolean;
+    status: string;
+    latency_ms: number;
+    primary_tables: Array<{
+      table_name: string;
+      role: string;
+      description: string;
+      records_count: number;
+    }>;
+  };
 }
+

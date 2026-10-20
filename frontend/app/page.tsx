@@ -9,6 +9,7 @@ import {
   triggerDiscovery 
 } from '@/lib/api';
 import LeadModal from '@/components/LeadModal';
+import DatabaseSettingCard from '@/components/DatabaseSettingCard';
 import Link from 'next/link';
 import { 
   Building2, 
@@ -29,7 +30,9 @@ import {
   Zap,
   ChevronDown,
   ChevronUp,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Layers,
+  Database
 } from 'lucide-react';
 
 const HIGH_GROWTH_SHOWCASE = [
@@ -57,7 +60,7 @@ const QUICK_WORLDWIDE_PRESETS = [
 export default function DashboardPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
-  const [activeFilter, setActiveFilter] = useState<string>('pending_approval');
+  const [activeFilter, setActiveFilter] = useState<string>('active');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(true);
@@ -294,39 +297,44 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* Database Engine & Central Store Settings */}
+      <DatabaseSettingCard initialTelemetry={stats?.database} />
+
       {/* KPI Stats Grid (Fully responsive on phone & tablet) */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
         <div className="p-4 sm:p-5 rounded-2xl bg-[#0e1322] border border-white/5 space-y-1">
           <span className="text-xs font-medium text-slate-400">Total Audited</span>
           <div className="text-xl sm:text-2xl font-bold text-white">{stats?.total_leads || 0}</div>
-          <div className="text-[10px] sm:text-[11px] text-slate-400">In Supabase DB</div>
+          <div className="text-[10px] sm:text-[11px] text-slate-400">Stored in Supabase</div>
         </div>
 
-        <div className="p-4 sm:p-5 rounded-2xl bg-[#0e1322] border border-rose-500/20 space-y-1">
-          <span className="text-xs font-medium text-rose-400 flex items-center gap-1">
-            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-            <span>No Website</span>
+        <div className="p-4 sm:p-5 rounded-2xl bg-[#0e1322] border border-indigo-500/30 space-y-1 bg-indigo-500/[0.04]">
+          <span className="text-xs font-medium text-indigo-400 flex items-center gap-1">
+            <Layers className="w-3.5 h-3.5 shrink-0" />
+            <span>Active Pipelines</span>
           </span>
-          <div className="text-xl sm:text-2xl font-bold text-rose-300">{stats?.no_website_count || 0}</div>
-          <div className="text-[10px] sm:text-[11px] text-slate-400">Web revamp targets</div>
+          <div className="text-xl sm:text-2xl font-bold text-indigo-300">
+            {stats?.active_pipelines_count ?? ((stats?.pending_approval || 0) + (stats?.missing_contact_count || 0))}
+          </div>
+          <div className="text-[10px] sm:text-[11px] text-slate-400">Active prospect funnel</div>
         </div>
 
         <div className="p-4 sm:p-5 rounded-2xl bg-[#0e1322] border border-amber-500/20 space-y-1">
           <span className="text-xs font-medium text-amber-400 flex items-center gap-1">
             <Clock className="w-3.5 h-3.5 shrink-0" />
-            <span>Pending Review</span>
+            <span>Email Ready</span>
           </span>
           <div className="text-xl sm:text-2xl font-bold text-amber-300">{stats?.pending_approval || 0}</div>
-          <div className="text-[10px] sm:text-[11px] text-slate-400">Awaiting Gmail approval</div>
+          <div className="text-[10px] sm:text-[11px] text-slate-400">1-click pitch review</div>
         </div>
 
-        <div className="p-4 sm:p-5 rounded-2xl bg-[#0e1322] border border-rose-400/20 space-y-1">
-          <span className="text-xs font-medium text-rose-400 flex items-center gap-1">
-            <XCircle className="w-3.5 h-3.5 shrink-0" />
-            <span>Rejected Drafts</span>
+        <div className="p-4 sm:p-5 rounded-2xl bg-[#0e1322] border border-sky-500/20 space-y-1">
+          <span className="text-xs font-medium text-sky-400 flex items-center gap-1">
+            <Phone className="w-3.5 h-3.5 shrink-0" />
+            <span>Needs Contact</span>
           </span>
-          <div className="text-xl sm:text-2xl font-bold text-rose-400">{stats?.rejected_count || 0}</div>
-          <div className="text-[10px] sm:text-[11px] text-slate-400">Custom email ready</div>
+          <div className="text-xl sm:text-2xl font-bold text-sky-300">{stats?.missing_contact_count || 0}</div>
+          <div className="text-[10px] sm:text-[11px] text-slate-400">Phone & address verified</div>
         </div>
 
         <Link
@@ -353,10 +361,12 @@ export default function DashboardPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/5 pb-4">
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full">
             {[
-              { id: 'pending_approval', label: `Active Queue (${stats?.pending_approval || 0})` },
-              { id: 'rejected', label: `Rejected (${stats?.rejected_count || 0})` },
-              { id: 'completed', label: `Completed & Sent (${stats?.sent_count || 0})` },
-              { id: 'all', label: 'All Archive' },
+              { id: 'active', label: `🚀 Active Pipelines (${stats?.active_pipelines_count ?? ((stats?.pending_approval || 0) + (stats?.missing_contact_count || 0))})` },
+              { id: 'pending_approval', label: `✉️ Email Ready (${stats?.pending_approval || 0})` },
+              { id: 'missing_contact', label: `📞 Needs Contact (${stats?.missing_contact_count || 0})` },
+              { id: 'rejected', label: `❌ Rejected (${stats?.rejected_count || 0})` },
+              { id: 'completed', label: `✅ Completed (${stats?.sent_count || 0})` },
+              { id: 'all', label: `🗄️ All Records (${stats?.total_leads || 0})` },
             ].map(tab => (
               <button
                 key={tab.id}
@@ -393,16 +403,18 @@ export default function DashboardPage() {
         ) : filteredLeads.length === 0 ? (
           <div className="py-12 sm:py-16 text-center text-slate-400 text-xs space-y-3 px-4">
             <p className="text-sm text-slate-300 font-medium">
-              {activeFilter === 'pending_approval' 
+              {activeFilter === 'active'
+                ? 'Your active pipeline is currently ready for prospects. Click "Scan 5 Businesses Now" to fetch verified local businesses worldwide!'
+                : activeFilter === 'pending_approval' 
                 ? 'All caught up! No leads are currently pending review in this queue.'
+                : activeFilter === 'missing_contact'
+                ? 'No leads currently pending contact details.'
                 : 'No leads match the current filter.'}
             </p>
             <p className="max-w-md mx-auto text-slate-400">
-              {activeFilter === 'pending_approval'
-                ? 'Approved leads automatically move to the Completed feature. Click "Scan 5 Businesses Now" to fetch new worldwide leads, or check the Completed Outreach page.'
-                : 'Click "Scan 5 Businesses Now" above to trigger discovery cycle immediately.'}
+              Approved pitches automatically archive to the Completed feature. Click "Scan 5 Businesses Now" to trigger live discovery immediately.
             </p>
-            {stats && stats.sent_count > 0 && activeFilter === 'pending_approval' && (
+            {stats && stats.sent_count > 0 && (
               <Link
                 href="/completed"
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-600/30 transition-colors"
@@ -418,8 +430,9 @@ export default function DashboardPage() {
             <div className="block md:hidden space-y-3">
               {filteredLeads.map((lead) => {
                 const isRejected = lead.status === 'rejected';
-                const isPending = lead.status === 'pending_approval';
+                const isPending = lead.status === 'pending_approval' || lead.status === 'draft_ready';
                 const isSent = lead.status === 'sent' || lead.status === 'approved';
+                const isMissingContact = lead.status === 'missing_contact' || (!lead.email && !isSent && !isRejected);
 
                 return (
                   <div
@@ -452,7 +465,7 @@ export default function DashboardPage() {
                     </div>
 
                     {/* Website Signal */}
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold ${
                         !lead.website || lead.website_status?.includes('No website') || lead.website_status?.includes('Unreachable')
                           ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
@@ -465,6 +478,11 @@ export default function DashboardPage() {
                       {isPending && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
                           <Clock className="w-3 h-3" /> Pending Review
+                        </span>
+                      )}
+                      {isMissingContact && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                          <Phone className="w-3 h-3" /> Phone Active (Needs Email)
                         </span>
                       )}
                       {isRejected && (
@@ -488,7 +506,7 @@ export default function DashboardPage() {
                       {lead.phone && (
                         <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
                           <Phone className="w-3 h-3 text-slate-400 shrink-0" />
-                          <span>{lead.phone}</span>
+                          <a href={`tel:${lead.phone}`} className="hover:underline text-slate-300">{lead.phone}</a>
                         </div>
                       )}
                     </div>
@@ -506,9 +524,13 @@ export default function DashboardPage() {
                       ) : (
                         <button
                           onClick={() => setSelectedLead(lead)}
-                          className="w-full py-2 px-3 rounded-lg text-xs font-semibold bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 flex items-center justify-center gap-1.5"
+                          className={`w-full py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                            isMissingContact
+                              ? 'bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/30'
+                              : 'bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10'
+                          }`}
                         >
-                          Review Pitch & Approve
+                          {isMissingContact ? 'Review Pitch & Add Email' : 'Review Pitch & Approve'}
                         </button>
                       )}
                     </div>
@@ -541,8 +563,9 @@ export default function DashboardPage() {
                 <tbody className="divide-y divide-white/[0.04]">
                   {filteredLeads.map((lead) => {
                     const isRejected = lead.status === 'rejected';
-                    const isPending = lead.status === 'pending_approval';
+                    const isPending = lead.status === 'pending_approval' || lead.status === 'draft_ready';
                     const isSent = lead.status === 'sent' || lead.status === 'approved';
+                    const isMissingContact = lead.status === 'missing_contact' || (!lead.email && !isSent && !isRejected);
 
                     return (
                       <tr key={lead.id} className="hover:bg-white/[0.02] transition-colors group">
@@ -581,7 +604,7 @@ export default function DashboardPage() {
                           {lead.phone && (
                             <div className="flex items-center gap-1.5 text-[11px] text-slate-400 mt-0.5 truncate">
                               <Phone className="w-3 h-3 text-slate-400 shrink-0" />
-                              <span className="truncate">{lead.phone}</span>
+                              <a href={`tel:${lead.phone}`} className="hover:underline text-slate-300 truncate">{lead.phone}</a>
                             </div>
                           )}
                         </td>
@@ -591,6 +614,11 @@ export default function DashboardPage() {
                           {isPending && (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
                               <Clock className="w-3 h-3 shrink-0" /> Pending Review
+                            </span>
+                          )}
+                          {isMissingContact && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-sky-500/10 text-sky-300 border border-sky-500/20">
+                              <Phone className="w-3 h-3 text-sky-400 shrink-0" /> Phone Active (Needs Email)
                             </span>
                           )}
                           {isRejected && (
@@ -626,9 +654,13 @@ export default function DashboardPage() {
                           ) : (
                             <button
                               onClick={() => setSelectedLead(lead)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-200 bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
+                              className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                                isMissingContact
+                                  ? 'text-sky-300 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 font-semibold'
+                                  : 'text-slate-200 bg-white/5 hover:bg-white/10 border border-white/10'
+                              }`}
                             >
-                              Review
+                              {isMissingContact ? 'Review & Enrich' : 'Review'}
                             </button>
                           )}
                         </td>

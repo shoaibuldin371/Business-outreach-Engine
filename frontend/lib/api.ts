@@ -15,7 +15,7 @@ export interface Lead {
   notes?: string;
   email_subject?: string;
   email_body?: string;
-  status: 'pending_approval' | 'approved' | 'rejected' | 'sent' | 'error';
+  status: 'pending_approval' | 'approved' | 'rejected' | 'sent' | 'error' | 'missing_contact' | 'draft_ready' | 'qualified' | 'discovered';
   approval_token?: string;
   source?: string;
   created_at?: string;
@@ -32,14 +32,35 @@ export interface SystemLog {
   created_at: string;
 }
 
+export interface DatabaseTableMeta {
+  table_name: string;
+  role: string;
+  description: string;
+  records_count: number;
+}
+
+export interface DatabaseTelemetry {
+  engine: string;
+  feature_name: string;
+  url: string;
+  host: string;
+  is_connected: boolean;
+  status: string;
+  latency_ms: number;
+  primary_tables: DatabaseTableMeta[];
+}
+
 export interface Stats {
   total_leads: number;
   no_website_count: number;
   pending_approval: number;
   rejected_count: number;
   sent_count: number;
+  missing_contact_count?: number;
+  active_pipelines_count?: number;
   total_logs: number;
   total_sent_emails: number;
+  database?: DatabaseTelemetry;
 }
 
 export async function fetchStats(): Promise<Stats> {
@@ -117,3 +138,20 @@ export async function updateSettings(settings: any): Promise<any> {
   if (!res.ok) throw new Error('Failed to update settings');
   return res.json();
 }
+
+export async function fetchDatabaseStatus(): Promise<DatabaseTelemetry> {
+  const res = await fetch(`${API_BASE}/api/database/status`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Failed to fetch database telemetry');
+  return res.json();
+}
+
+export async function patchLead(id: string, updates: Partial<Lead>): Promise<Lead> {
+  const res = await fetch(`${API_BASE}/api/leads/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+  if (!res.ok) throw new Error('Failed to update lead');
+  return res.json();
+}
+
