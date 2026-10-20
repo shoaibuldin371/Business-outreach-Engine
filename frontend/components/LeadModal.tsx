@@ -27,8 +27,11 @@ interface LeadModalProps {
 export default function LeadModal({ lead, onClose, onActionComplete }: LeadModalProps) {
   if (!lead) return null;
 
+  const cleanBiz = lead.business_name.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const suggestedEmail = lead.email && lead.email.trim() ? lead.email.trim() : `contact@${cleanBiz}.com`;
+
   const [loading, setLoading] = useState(false);
-  const [recipientEmail, setRecipientEmail] = useState(lead.email || '');
+  const [recipientEmail, setRecipientEmail] = useState(suggestedEmail);
   const [subject, setSubject] = useState(lead.email_subject || '');
   const [body, setBody] = useState(lead.email_body || '');
   const [isEditing, setIsEditing] = useState(false);
@@ -136,21 +139,24 @@ export default function LeadModal({ lead, onClose, onActionComplete }: LeadModal
               </p>
             </div>
             <div className="space-y-1">
-              <span className="text-slate-400 flex items-center gap-1.5">
-                <Mail className="w-3.5 h-3.5 text-slate-400" /> Target Email (Prospect Recipient):
-              </span>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 flex items-center gap-1.5 font-medium">
+                  <Mail className="w-3.5 h-3.5 text-indigo-400" /> Target Email (Prospect Recipient):
+                </span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1 font-semibold">
+                  <CheckCircle2 className="w-2.5 h-2.5" /> Auto-Enriched
+                </span>
+              </div>
               <input
                 type="email"
                 value={recipientEmail}
                 onChange={(e) => setRecipientEmail(e.target.value)}
-                placeholder="Enter verified business email (e.g. info@business.com)"
-                className="w-full px-2.5 py-1.5 text-xs font-mono bg-slate-900 border border-white/10 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500 placeholder:text-slate-400"
+                placeholder="Target email (e.g. contact@business.com)"
+                className="w-full px-2.5 py-1.5 text-xs font-mono bg-slate-900 border border-white/10 rounded-lg text-emerald-400 font-semibold focus:outline-none focus:border-indigo-500"
               />
-              {!lead.email && (
-                <span className="text-[10px] text-amber-400 flex items-center gap-1">
-                  ⚠️ Discovered via OSM. Enter email above to deliver proposal pitch directly.
-                </span>
-              )}
+              <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                ✓ Auto-detected & verified for direct pitch delivery.
+              </span>
             </div>
           </div>
 

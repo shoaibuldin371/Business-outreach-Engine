@@ -1,5 +1,11 @@
 import nodemailer from 'nodemailer';
-import dns from 'dns/promises';
+import dns from 'dns';
+const dnsPromises = dns.promises;
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1', '8.8.4.4']);
+} catch {
+  // ignore
+}
 import {
   insertLog,
   recordSentEmail,
@@ -23,7 +29,7 @@ export async function verifyDomainHasMx(email: string): Promise<boolean> {
       return false;
     }
 
-    const records = await dns.resolveMx(domain);
+    const records = await dnsPromises.resolveMx(domain);
     return Array.isArray(records) && records.length > 0;
   } catch (e) {
     return false;

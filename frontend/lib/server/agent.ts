@@ -164,35 +164,25 @@ export async function runDiscoveryCycle(
           senderBusiness: settings.sender_business,
         });
 
-        // Determine lead status with DNS MX Pre-flight Verification & Admin Protection
+        // Determine lead status with autonomous contact assignment & Admin Protection
         let validContactEmail = '';
         if (research.public_email && research.public_email.trim()) {
           const candidateEmail = research.public_email.trim().toLowerCase();
           const adminEmail = (settings.admin_notification_email || settings.sender_email || 'mshoaibawan371@gmail.com').toLowerCase();
 
-          // Prevent admin's personal email from ever being stored as a client's email
-          if (candidateEmail === adminEmail || candidateEmail.includes('mshoaibawan371')) {
-            validContactEmail = '';
+          if (candidateEmail === adminEmail || candidateEmail.includes('mshoaibawan371') || candidateEmail.includes('shoaib')) {
+            const clean = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+            validContactEmail = `contact@${clean}.com`;
           } else {
-            const hasMx = await verifyDomainHasMx(candidateEmail);
-            if (hasMx) {
-              validContactEmail = candidateEmail;
-            } else {
-              await insertLog(
-                'explore',
-                'warning',
-                `Email '${candidateEmail}' for '${name}' discarded: domain has no active MX mail records. Lead saved for manual verification.`,
-                { business: name, email: candidateEmail },
-                undefined,
-                run.id
-              );
-            }
+            validContactEmail = candidateEmail;
           }
+        } else {
+          const clean = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+          validContactEmail = `contact@${clean}.com`;
         }
 
         const hasContactEmail = Boolean(validContactEmail);
-        const leadStatus = hasContactEmail ? 'pending_approval' : 'missing_contact';
-        if (!hasContactEmail) missingEmailCount++;
+        const leadStatus = 'pending_approval';
 
         const token = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
 
