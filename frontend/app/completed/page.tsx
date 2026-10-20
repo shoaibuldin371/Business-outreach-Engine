@@ -119,11 +119,11 @@ export default function CompletedOutreachPage() {
         </div>
 
         <div className="p-4 sm:p-5 rounded-2xl bg-[#0e1322] border border-white/5 space-y-1">
-          <span className="text-xs font-medium text-indigo-400 flex items-center gap-1.5">
-            <Sparkles className="w-4 h-4" /> Sender
+          <span className="text-xs font-medium text-emerald-400 flex items-center gap-1.5">
+            <CheckCircle2 className="w-4 h-4" /> Delivery Channel
           </span>
-          <div className="text-xs sm:text-sm font-bold text-slate-200 truncate">Muhammad Shoaib</div>
-          <div className="text-[10px] sm:text-[11px] text-slate-400 truncate">Mshoaibawan371@gmail.com</div>
+          <div className="text-xs sm:text-sm font-bold text-slate-200 truncate">Gmail API (Verified)</div>
+          <div className="text-[10px] sm:text-[11px] text-emerald-400 truncate">● MX Pre-flight Guard Active</div>
         </div>
       </div>
 

@@ -166,22 +166,29 @@ export async function runDiscoveryCycle(
           senderBusiness: settings.sender_business,
         });
 
-        // Determine lead status with DNS MX Pre-flight Verification
+        // Determine lead status with DNS MX Pre-flight Verification & Admin Protection
         let validContactEmail = '';
         if (research.public_email && research.public_email.trim()) {
-          const candidateEmail = research.public_email.trim();
-          const hasMx = await verifyDomainHasMx(candidateEmail);
-          if (hasMx) {
-            validContactEmail = candidateEmail;
+          const candidateEmail = research.public_email.trim().toLowerCase();
+          const adminEmail = (settings.admin_notification_email || settings.sender_email || 'mshoaibawan371@gmail.com').toLowerCase();
+
+          // Prevent admin's personal email from ever being stored as a client's email
+          if (candidateEmail === adminEmail || candidateEmail.includes('mshoaibawan371')) {
+            validContactEmail = '';
           } else {
-            await insertLog(
-              'explore',
-              'warning',
-              `Email '${candidateEmail}' for '${name}' discarded: domain has no active MX mail records. Lead saved for manual verification.`,
-              { business: name, email: candidateEmail },
-              undefined,
-              run.id
-            );
+            const hasMx = await verifyDomainHasMx(candidateEmail);
+            if (hasMx) {
+              validContactEmail = candidateEmail;
+            } else {
+              await insertLog(
+                'explore',
+                'warning',
+                `Email '${candidateEmail}' for '${name}' discarded: domain has no active MX mail records. Lead saved for manual verification.`,
+                { business: name, email: candidateEmail },
+                undefined,
+                run.id
+              );
+            }
           }
         }
 

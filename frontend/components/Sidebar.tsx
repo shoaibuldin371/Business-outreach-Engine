@@ -15,6 +15,10 @@ import {
 export default function Sidebar() {
   const pathname = usePathname();
 
+  if (pathname === '/login') {
+    return null;
+  }
+
   const navItems = [
     { label: 'Active Pipeline', href: '/', icon: LayoutDashboard },
     { label: 'Completed', href: '/completed', icon: CheckCheck },
