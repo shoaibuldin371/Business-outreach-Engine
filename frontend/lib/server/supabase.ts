@@ -156,58 +156,67 @@ export async function insertLead(data: Partial<BusinessLead>): Promise<BusinessL
 
 export async function getLeads(status?: string, limit = 200): Promise<BusinessLead[]> {
   const sb = getClient();
+  let allLeads: BusinessLead[] = [];
+
   if (sb) {
     try {
-      const ACTIVE_STATUSES = ['pending_approval', 'draft_ready', 'qualified', 'discovered', 'missing_contact', 'needs_contact'];
-
       // 1. Query primary live leads table
-      let legQuery = sb.from('leads').select('*').order('created_at', { ascending: false }).limit(limit);
-      if (status && status !== 'all') {
-        if (status === 'completed' || status === 'sent') {
-          legQuery = legQuery.in('status', ['sent', 'approved']);
-        } else if (status === 'active') {
-          legQuery = legQuery.in('status', ACTIVE_STATUSES);
-        } else {
-          legQuery = legQuery.eq('status', status);
+      const legRes = await sb.from('leads').select('*').order('created_at', { ascending: false }).limit(limit);
+      if (!legRes.error && Array.isArray(legRes.data) && legRes.data.length > 0) {
+        allLeads = legRes.data as unknown as BusinessLead[];
+      } else {
+        // Fallback to business_leads if leads table is empty
+        const busRes = await sb.from('business_leads').select('*').order('created_at', { ascending: false }).limit(limit);
+        if (!busRes.error && Array.isArray(busRes.data) && busRes.data.length > 0) {
+          allLeads = busRes.data as unknown as BusinessLead[];
         }
       }
-      const legRes = await legQuery;
-      if (!legRes.error && legRes.data && legRes.data.length > 0) {
-        return legRes.data as unknown as BusinessLead[];
-      }
-
-      // 2. Fallback to business_leads table if leads table is empty
-      let query = sb.from('business_leads').select('*').order('created_at', { ascending: false }).limit(limit);
-      if (status && status !== 'all') {
-        if (status === 'completed' || status === 'sent') {
-          query = query.in('status', ['sent', 'approved']);
-        } else if (status === 'active') {
-          query = query.in('status', ACTIVE_STATUSES);
-        } else {
-          query = query.eq('status', status);
-        }
-      }
-      const { data, error } = await query;
-      if (!error && data && data.length > 0) return data as BusinessLead[];
-
-      if (!legRes.error && legRes.data) return legRes.data as unknown as BusinessLead[];
     } catch (e) {
       console.warn('Supabase getLeads exception:', e);
     }
   }
 
-  const ACTIVE_STATUSES = ['pending_approval', 'draft_ready', 'qualified', 'discovered', 'missing_contact', 'needs_contact'];
-  let list = memStore.leads;
-  if (status && status !== 'all') {
-    if (status === 'completed' || status === 'sent') {
-      list = list.filter((l) => l.status === 'sent' || l.status === 'approved');
-    } else if (status === 'active') {
-      list = list.filter((l) => ACTIVE_STATUSES.includes(l.status));
-    } else {
-      list = list.filter((l) => l.status === status);
-    }
+  if (allLeads.length === 0 && memStore.leads.length > 0) {
+    allLeads = memStore.leads;
   }
-  return list.slice(0, limit);
+
+  // Canonical Single-Source-Of-Truth Filtering
+  if (!status || status === 'all') {
+    return allLeads.slice(0, limit);
+  }
+
+  if (status === 'completed' || status === 'sent') {
+    return allLeads.filter((l) => l.status === 'sent' || l.status === 'approved').slice(0, limit);
+  }
+
+  if (status === 'rejected') {
+    return allLeads.filter((l) => l.status === 'rejected').slice(0, limit);
+  }
+
+  if (status === 'pending_approval') {
+    // Only leads that actually have a verified target email ready to send
+    return allLeads
+      .filter((l) => (l.status === 'pending_approval' || l.status === 'draft_ready') && Boolean(l.email && l.email.trim()))
+      .slice(0, limit);
+  }
+
+  if (status === 'missing_contact' || status === 'needs_contact') {
+    // Any active lead that lacks a verified email (phone outreach)
+    return allLeads
+      .filter((l) => 
+        l.status === 'missing_contact' || 
+        (!l.email && !['sent', 'approved', 'rejected', 'completed'].includes(l.status))
+      )
+      .slice(0, limit);
+  }
+
+  if (status === 'active') {
+    return allLeads
+      .filter((l) => !['sent', 'approved', 'rejected'].includes(l.status))
+      .slice(0, limit);
+  }
+
+  return allLeads.filter((l) => l.status === status).slice(0, limit);
 }
 
 export async function getLeadById(id: string): Promise<BusinessLead | null> {
@@ -891,14 +900,18 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const noWeb = leads.filter(
     (l) => !l.website || l.website_status === 'none_found' || l.website_status === 'unreachable'
   ).length;
-  const pending = leads.filter((l) => l.status === 'pending_approval' || l.status === 'draft_ready').length;
-  const approved = leads.filter((l) => l.status === 'approved').length;
-  const sent = leads.filter((l) => l.status === 'sent').length;
-  const rejected = leads.filter((l) => l.status === 'rejected').length;
-  const missingContact = leads.filter((l) => l.status === 'missing_contact').length;
-  const activePipelines = leads.filter((l) =>
-    ['pending_approval', 'draft_ready', 'qualified', 'discovered', 'missing_contact', 'needs_contact'].includes(l.status)
+  const pending = leads.filter(
+    (l) => (l.status === 'pending_approval' || l.status === 'draft_ready') && Boolean(l.email && l.email.trim())
   ).length;
+  const approved = leads.filter((l) => l.status === 'approved').length;
+  const sent = leads.filter((l) => l.status === 'sent' || l.status === 'approved').length;
+  const rejected = leads.filter((l) => l.status === 'rejected').length;
+  const missingContact = leads.filter(
+    (l) =>
+      l.status === 'missing_contact' ||
+      (!l.email && !['sent', 'approved', 'rejected', 'completed'].includes(l.status))
+  ).length;
+  const activePipelines = pending + missingContact;
 
   return {
     total_leads: total,

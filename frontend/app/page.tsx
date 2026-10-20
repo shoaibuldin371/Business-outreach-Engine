@@ -117,12 +117,15 @@ export default function DashboardPage() {
   };
 
   const filteredLeads = leads.filter(l => {
-    const q = searchQuery.toLowerCase();
+    if (!l) return false;
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return true;
     return (
-      l.business_name.toLowerCase().includes(q) ||
-      (l.city && l.city.toLowerCase().includes(q)) ||
-      (l.category && l.category.toLowerCase().includes(q)) ||
-      (l.email && l.email.toLowerCase().includes(q))
+      (l.business_name || '').toLowerCase().includes(q) ||
+      (l.city || '').toLowerCase().includes(q) ||
+      (l.category || '').toLowerCase().includes(q) ||
+      (l.email || '').toLowerCase().includes(q) ||
+      (l.phone || '').toLowerCase().includes(q)
     );
   });
 
