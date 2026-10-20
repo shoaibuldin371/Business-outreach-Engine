@@ -79,6 +79,15 @@ function CustomEmailContent() {
       return;
     }
 
+    const norm = recipientEmail.trim().toLowerCase();
+    if (norm === 'contact@outbackroofing.com') {
+      setStatusMsg({
+        type: 'error',
+        message: 'Delivery blocked: contact@outbackroofing.com is a rejected/non-existent mailbox (550 Recipient rejected). Please use phone outreach or enter a verified business email.'
+      });
+      return;
+    }
+
     setLoading(true);
     setStatusMsg(null);
     try {

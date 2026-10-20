@@ -36,6 +36,28 @@ export async function verifyDomainHasMx(email: string): Promise<boolean> {
   }
 }
 
+// List of known rejected/non-existent recipient emails that returned 550 or hard bounces
+export const KNOWN_BOUNCED_OR_BLOCKED_EMAILS = new Set([
+  'contact@outbackroofing.com',
+]);
+
+export function isBlockedOrBouncedEmail(email: string): boolean {
+  if (!email) return true;
+  const norm = email.trim().toLowerCase();
+  if (KNOWN_BOUNCED_OR_BLOCKED_EMAILS.has(norm)) return true;
+  // Block any placeholder domains
+  if (
+    norm.endsWith('@example.com') ||
+    norm.endsWith('@domain.com') ||
+    norm.endsWith('@business.com') ||
+    norm.endsWith('.local') ||
+    norm.endsWith('.invalid')
+  ) {
+    return true;
+  }
+  return false;
+}
+
 function getSmtpTransporter() {
   const host = process.env.SMTP_HOST;
   const user = process.env.SMTP_USER;
@@ -74,6 +96,15 @@ export async function sendEmail({
 }> {
   if (!to || !to.trim()) {
     return { success: false, provider: 'simulation', message: 'Recipient email is required.' };
+  }
+
+  const normalizedTo = to.trim().toLowerCase();
+  if (isBlockedOrBouncedEmail(normalizedTo)) {
+    return {
+      success: false,
+      provider: 'simulation',
+      message: `Delivery permanently blocked: '${to}' is a known rejected/bounced mailbox (550 Recipient rejected). Blocked to prevent Google Mailer-Daemon bounce notifications.`,
+    };
   }
 
   // 1. Try Gmail OAuth if connected
@@ -236,15 +267,15 @@ export async function sendPitchToProspect(
 ): Promise<{ success: boolean; message: string; provider?: string }> {
   const recipient = lead.email?.trim();
 
-  if (!recipient) {
+  if (!recipient || isBlockedOrBouncedEmail(recipient)) {
     await insertLog(
       'error',
-      'error',
-      `Cannot send outreach: ${lead.business_name} has no verified recipient email address.`,
-      { lead_id: lead.id },
+      'warning',
+      `Cannot send outreach: ${lead.business_name} has no verified recipient email address (or address '${recipient || 'empty'}' was rejected/blocked). Blocked to prevent Google bounce notifications.`,
+      { lead_id: lead.id, recipient },
       lead.id
     );
-    return { success: false, message: 'Prospect has no email address.' };
+    return { success: false, message: 'Prospect has no verified email address (or address is blocked).' };
   }
 
   // Idempotency check: Check if already sent

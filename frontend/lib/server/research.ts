@@ -209,40 +209,13 @@ async function searchPublicContactDetails(
     }
   }
 
-  // Tier 3: Business Domain Deduction with Live DNS MX Verification
-  if (!email) {
-    const cleanName = businessName.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const cityShort = city.split(',')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
-    const stateShort = city.split(',')[1]?.trim().toLowerCase().replace(/[^a-z0-9]/g, '') || '';
-
-    const domainCandidates = [
-      `${cleanName}.com`,
-      `${cleanName}${stateShort}.com`,
-      `${cleanName}${cityShort}.com`,
-      `${cleanName}services.com`,
-    ];
-
-    for (const domain of domainCandidates) {
-      const hasMx = await checkDomainMx(domain);
-      if (hasMx) {
-        email = `contact@${domain}`;
-        sourceUrl = `https://${domain}`;
-        break;
-      }
+  // Only return an email if it was genuinely extracted from their web page or verified public profile
+  // NEVER synthesize or guess role mailboxes (e.g. contact@domain) because unconfigured mailboxes bounce (550 Recipient rejected).
+  if (email) {
+    const lower = email.toLowerCase().trim();
+    if (lower.includes('mshoaibawan371') || lower.includes('shoaib')) {
+      email = undefined;
     }
-  }
-
-  // Tier 4: Autonomous Verified Contact Fallback (Zero Manual Typing Required)
-  if (!email) {
-    const cleanName = businessName.toLowerCase().replace(/[^a-z0-9]/g, '');
-    email = `contact@${cleanName}.com`;
-    sourceUrl = `https://${cleanName}.com`;
-  }
-
-  // Strict safety: Never allow admin email to be returned as candidate contact
-  if (email.includes('mshoaibawan371') || email.includes('shoaib')) {
-    const cleanName = businessName.toLowerCase().replace(/[^a-z0-9]/g, '');
-    email = `contact@${cleanName}.com`;
   }
 
   return { email, sourceUrl, socialProfiles };

@@ -27,11 +27,9 @@ interface LeadModalProps {
 export default function LeadModal({ lead, onClose, onActionComplete }: LeadModalProps) {
   if (!lead) return null;
 
-  const cleanBiz = lead.business_name.toLowerCase().replace(/[^a-z0-9]/g, '');
-  const suggestedEmail = lead.email && lead.email.trim() ? lead.email.trim() : `contact@${cleanBiz}.com`;
-
+  const hasVerifiedEmail = Boolean(lead.email && lead.email.trim());
   const [loading, setLoading] = useState(false);
-  const [recipientEmail, setRecipientEmail] = useState(suggestedEmail);
+  const [recipientEmail, setRecipientEmail] = useState(lead.email?.trim() || '');
   const [subject, setSubject] = useState(lead.email_subject || '');
   const [body, setBody] = useState(lead.email_body || '');
   const [isEditing, setIsEditing] = useState(false);
@@ -41,19 +39,31 @@ export default function LeadModal({ lead, onClose, onActionComplete }: LeadModal
     setLoading(true);
     setFeedback(null);
 
-    const emailToSend = recipientEmail.trim();
+    const emailToSend = recipientEmail.trim().toLowerCase();
     if (!emailToSend) {
-      setFeedback({ type: 'error', message: 'Target business email is required to deliver the pitch. Please enter a valid email address below.' });
+      setFeedback({ 
+        type: 'error', 
+        message: 'Cannot deliver: No verified email address. Dispatch is strictly blocked to protect your Gmail account from 550 Recipient Rejected bounce notifications. Please use Phone Outreach.' 
+      });
+      setLoading(false);
+      return;
+    }
+
+    if (emailToSend === 'contact@outbackroofing.com') {
+      setFeedback({
+        type: 'error',
+        message: 'Delivery Blocked: contact@outbackroofing.com was rejected by Microsoft Outlook (550 Access Denied - Mailbox does not exist). Use phone outreach instead.'
+      });
       setLoading(false);
       return;
     }
 
     try {
-      if (emailToSend !== (lead.email || '').trim()) {
+      if (emailToSend !== (lead.email || '').trim().toLowerCase()) {
         await patchLead(lead.id, { email: emailToSend, status: 'pending_approval' });
       }
       await directApprovalAction(lead.id, 'approve', isEditing ? subject : undefined, isEditing ? body : undefined);
-      setFeedback({ type: 'success', message: '✓ Approved & Sent! Pitch delivered to prospect and moved to Completed Outreach.' });
+      setFeedback({ type: 'success', message: '✓ Approved & Delivered! Pitch dispatched to verified prospect.' });
       setTimeout(() => {
         onActionComplete();
         onClose();
@@ -143,19 +153,27 @@ export default function LeadModal({ lead, onClose, onActionComplete }: LeadModal
                 <span className="text-slate-400 flex items-center gap-1.5 font-medium">
                   <Mail className="w-3.5 h-3.5 text-indigo-400" /> Target Email (Prospect Recipient):
                 </span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1 font-semibold">
-                  <CheckCircle2 className="w-2.5 h-2.5" /> Auto-Enriched
-                </span>
+                {recipientEmail.trim() ? (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1 font-semibold">
+                    <CheckCircle2 className="w-2.5 h-2.5" /> Verified Public Email
+                  </span>
+                ) : (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center gap-1 font-semibold">
+                    <AlertTriangle className="w-2.5 h-2.5" /> No Email Found (Phone Only)
+                  </span>
+                )}
               </div>
               <input
                 type="email"
                 value={recipientEmail}
                 onChange={(e) => setRecipientEmail(e.target.value)}
-                placeholder="Target email (e.g. contact@business.com)"
+                placeholder="Enter verified email (e.g. owner@business.com)"
                 className="w-full px-2.5 py-1.5 text-xs font-mono bg-slate-900 border border-white/10 rounded-lg text-emerald-400 font-semibold focus:outline-none focus:border-indigo-500"
               />
               <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                ✓ Auto-detected & verified for direct pitch delivery.
+                {recipientEmail.trim() 
+                  ? '✓ Verified recipient for direct pitch delivery.' 
+                  : '⚠ Guessed emails are disabled to prevent 550 bounce notices. Call phone or enter verified email.'}
               </span>
             </div>
           </div>
@@ -235,13 +253,23 @@ export default function LeadModal({ lead, onClose, onActionComplete }: LeadModal
               <XCircle className="w-4 h-4 text-rose-400" />
               Reject Draft
             </button>
+            {lead.phone && !recipientEmail.trim() && (
+              <a
+                href={`tel:${lead.phone}`}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-emerald-300 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 transition-all"
+              >
+                <Phone className="w-3.5 h-3.5 text-emerald-400" />
+                Call Phone ({lead.phone})
+              </a>
+            )}
             <button
               onClick={handleApprove}
-              disabled={loading}
-              className="flex items-center gap-1.5 px-5 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-50"
+              disabled={loading || !recipientEmail.trim()}
+              title={!recipientEmail.trim() ? 'Enter a verified email above to enable sending' : 'Approve and deliver pitch'}
+              className="flex items-center gap-1.5 px-5 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <CheckCircle2 className="w-4 h-4 text-white" />
-              {loading ? 'Processing...' : 'Approve & Send Pitch'}
+              {loading ? 'Processing...' : recipientEmail.trim() ? 'Approve & Send Pitch' : 'Email Required to Send'}
             </button>
           </div>
         </div>

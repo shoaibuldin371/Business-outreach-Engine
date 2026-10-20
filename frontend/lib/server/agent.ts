@@ -164,25 +164,19 @@ export async function runDiscoveryCycle(
           senderBusiness: settings.sender_business,
         });
 
-        // Determine lead status with autonomous contact assignment & Admin Protection
         let validContactEmail = '';
         if (research.public_email && research.public_email.trim()) {
           const candidateEmail = research.public_email.trim().toLowerCase();
           const adminEmail = (settings.admin_notification_email || settings.sender_email || 'mshoaibawan371@gmail.com').toLowerCase();
 
-          if (candidateEmail === adminEmail || candidateEmail.includes('mshoaibawan371') || candidateEmail.includes('shoaib')) {
-            const clean = name.toLowerCase().replace(/[^a-z0-9]/g, '');
-            validContactEmail = `contact@${clean}.com`;
-          } else {
+          if (candidateEmail !== adminEmail && !candidateEmail.includes('mshoaibawan371') && !candidateEmail.includes('shoaib')) {
             validContactEmail = candidateEmail;
           }
-        } else {
-          const clean = name.toLowerCase().replace(/[^a-z0-9]/g, '');
-          validContactEmail = `contact@${clean}.com`;
         }
 
         const hasContactEmail = Boolean(validContactEmail);
-        const leadStatus = 'pending_approval';
+        const leadStatus = hasContactEmail ? 'pending_approval' : 'missing_contact';
+        if (!hasContactEmail) missingEmailCount++;
 
         const token = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getLeadById, updateLead, insertLog, recordSentEmail } from '@/lib/server/supabase';
-import { sendEmail, verifyDomainHasMx } from '@/lib/server/email';
+import { sendEmail, verifyDomainHasMx, isBlockedOrBouncedEmail } from '@/lib/server/email';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,6 +18,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     if (!recipient || !recipient.trim()) {
       return NextResponse.json({ error: 'Recipient email is required.' }, { status: 400 });
+    }
+    if (isBlockedOrBouncedEmail(recipient)) {
+      return NextResponse.json({
+        error: `Cannot send: '${recipient}' is an unverified or rejected mailbox (550 Recipient rejected). Blocked to prevent Google Mailer-Daemon bounce emails. Please use phone outreach or enter a verified personal/direct business address.`
+      }, { status: 400 });
     }
     if (!subject || !emailBody) {
       return NextResponse.json({ error: 'Subject and body are required.' }, { status: 400 });
