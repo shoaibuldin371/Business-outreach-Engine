@@ -37,6 +37,7 @@ export function getClient(): SupabaseClient | null {
     '';
 
   if (supabaseUrl && supabaseKey && supabaseUrl.startsWith('http')) {
+    try {
       client = createClient(supabaseUrl, supabaseKey, {
         auth: { persistSession: false },
         global: {

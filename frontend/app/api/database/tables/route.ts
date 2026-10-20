@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getClient, getDatabaseTelemetry } from '@/lib/server/supabase';
+import { getClient, getDatabaseTelemetry, getLeads } from '@/lib/server/supabase';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -23,8 +23,7 @@ export async function GET(req: NextRequest) {
     let count = 0;
 
     if (table === 'leads') {
-      const res = await sb.from('leads').select('*').order('created_at', { ascending: false }).limit(limit);
-      rows = res.data || [];
+      rows = await getLeads('all', limit);
       count = rows.length;
     } else if (table === 'logs') {
       const res = await sb.from('logs').select('*').order('created_at', { ascending: false }).limit(limit);
@@ -92,14 +91,23 @@ export async function GET(req: NextRequest) {
       },
     };
 
-    return NextResponse.json({
-      telemetry,
-      current_table: table,
-      schema: schemas[table] || null,
-      all_schemas: schemas,
-      count,
-      rows,
-    });
+    return NextResponse.json(
+      {
+        telemetry,
+        current_table: table,
+        schema: schemas[table] || null,
+        all_schemas: schemas,
+        count,
+        rows,
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          Pragma: 'no-cache',
+          Expires: '0',
+        },
+      }
+    );
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
