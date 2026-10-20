@@ -10,6 +10,7 @@ import {
   Settings, 
   Sparkles,
   CheckCheck,
+  Database,
 } from 'lucide-react';
 
 export default function Sidebar() {
@@ -21,6 +22,7 @@ export default function Sidebar() {
 
   const navItems = [
     { label: 'Active Pipeline', href: '/', icon: LayoutDashboard },
+    { label: 'Database', href: '/database', icon: Database },
     { label: 'Completed', href: '/completed', icon: CheckCheck },
     { label: 'Logs', href: '/logs', icon: Terminal },
     { label: 'Custom Email', href: '/custom-email', icon: Send },
