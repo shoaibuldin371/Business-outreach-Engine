@@ -60,12 +60,10 @@ export async function runDiscoveryCycle(
   }
 
   // Dynamic Worldwide Hub & High-Growth Category Selection (100% Autopilot)
-  const isDefaultCity = !customCity || !customCity.trim() || customCity.trim().toLowerCase() === 'dallas, tx';
+  const isDefaultCity = !customCity || !customCity.trim();
   const hub = isDefaultCity ? getRandomWorldwideHub() : null;
-  const city = customCity && !isDefaultCity ? customCity.trim() : (hub ? `${hub.city}, ${hub.country}` : 'London, United Kingdom');
-  const category = customCategory && customCategory.trim() && customCategory.trim().toLowerCase() !== 'dentists' 
-    ? customCategory.trim() 
-    : getRandomWorldwideCategory();
+  const city = customCity && customCity.trim() ? customCity.trim() : (hub ? `${hub.city}, ${hub.country}` : 'London, United Kingdom');
+  const category = customCategory && customCategory.trim() ? customCategory.trim() : getRandomWorldwideCategory();
   const count = customCount || settings.batch_size || 5;
 
   const run = await createAutomationRun(triggerType, category, city, count);
