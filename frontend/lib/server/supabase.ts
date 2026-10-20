@@ -117,8 +117,8 @@ export async function insertLead(data: Partial<BusinessLead>): Promise<BusinessL
       let { data: res, error } = await sb.from('business_leads').insert(lead).select().single();
       if (!error && res) return res as BusinessLead;
 
-      // Fallback to existing leads table if business_leads table has not run migration yet
-      if (error && error.code === '42P01') {
+      // Fallback to existing leads table if business_leads table does not exist
+      if (error) {
         const legacyLead = {
           id: lead.id,
           business_name: lead.business_name,

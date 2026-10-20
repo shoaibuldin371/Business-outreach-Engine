@@ -165,7 +165,6 @@ Best regards,
 
 ${senderName}
 ${senderBusiness}
-Email: ${senderEmail}
 
 (If this isn't relevant to you right now, please simply reply with "No thanks" and I will ensure no further messages are sent.)`;
 
