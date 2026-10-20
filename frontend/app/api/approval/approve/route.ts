@@ -46,10 +46,20 @@ export async function GET(req: NextRequest) {
 
   const lead = await getLeadByToken(token);
   if (!lead) {
-    return new Response(renderHtml('Token Expired or Invalid', 'Error', '#ef4444', 'This outreach proposal was not found or has expired.', 'Open Dashboard', appUrl), {
-      status: 404,
-      headers: { 'Content-Type': 'text/html' },
-    });
+    return new Response(
+      renderHtml(
+        'Legacy Proposal Link Expired',
+        'Notice: Purged Test Lead',
+        '#f59e0b',
+        'This approval link belonged to a previously purged test lead. All test data was removed from the database so only <strong>100% verified real businesses</strong> are reached.<br><br>Please visit your live dashboard to review and approve proposals for real businesses in your active pipeline.',
+        'Open Active Pipelines Dashboard →',
+        appUrl
+      ),
+      {
+        status: 200,
+        headers: { 'Content-Type': 'text/html' },
+      }
+    );
   }
 
   if (lead.status === 'sent' || lead.status === 'approved') {

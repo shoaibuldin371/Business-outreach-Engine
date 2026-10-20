@@ -45,10 +45,20 @@ export async function GET(req: NextRequest) {
 
   const lead = await getLeadByToken(token);
   if (!lead) {
-    return new Response(renderHtml('Not Found', 'Error', '#ef4444', 'Lead not found for this token.', 'Open Dashboard', appUrl), {
-      status: 404,
-      headers: { 'Content-Type': 'text/html' },
-    });
+    return new Response(
+      renderHtml(
+        'Legacy Proposal Link Expired',
+        'Notice: Purged Test Lead',
+        '#f59e0b',
+        'This link belonged to a previously purged test lead. All test data was removed from the database so only <strong>100% verified real businesses</strong> are reached.<br><br>Please visit your live dashboard to review real businesses in your active pipeline.',
+        'Open Active Pipelines Dashboard →',
+        appUrl
+      ),
+      {
+        status: 200,
+        headers: { 'Content-Type': 'text/html' },
+      }
+    );
   }
 
   await updateLead(lead.id, { status: 'rejected' });

@@ -157,21 +157,7 @@ export async function getLeads(status?: string, limit = 200): Promise<BusinessLe
     try {
       const ACTIVE_STATUSES = ['pending_approval', 'draft_ready', 'qualified', 'discovered', 'missing_contact', 'needs_contact'];
 
-      // 1. Try business_leads table first
-      let query = sb.from('business_leads').select('*').order('created_at', { ascending: false }).limit(limit);
-      if (status && status !== 'all') {
-        if (status === 'completed' || status === 'sent') {
-          query = query.in('status', ['sent', 'approved']);
-        } else if (status === 'active') {
-          query = query.in('status', ACTIVE_STATUSES);
-        } else {
-          query = query.eq('status', status);
-        }
-      }
-      const { data, error } = await query;
-      if (!error && data && data.length > 0) return data as BusinessLead[];
-
-      // 2. Query legacy leads table if business_leads has 0 records or errored
+      // 1. Query primary live leads table
       let legQuery = sb.from('leads').select('*').order('created_at', { ascending: false }).limit(limit);
       if (status && status !== 'all') {
         if (status === 'completed' || status === 'sent') {
@@ -186,7 +172,22 @@ export async function getLeads(status?: string, limit = 200): Promise<BusinessLe
       if (!legRes.error && legRes.data && legRes.data.length > 0) {
         return legRes.data as unknown as BusinessLead[];
       }
-      if (!error && data) return data as BusinessLead[];
+
+      // 2. Fallback to business_leads table if leads table is empty
+      let query = sb.from('business_leads').select('*').order('created_at', { ascending: false }).limit(limit);
+      if (status && status !== 'all') {
+        if (status === 'completed' || status === 'sent') {
+          query = query.in('status', ['sent', 'approved']);
+        } else if (status === 'active') {
+          query = query.in('status', ACTIVE_STATUSES);
+        } else {
+          query = query.eq('status', status);
+        }
+      }
+      const { data, error } = await query;
+      if (!error && data && data.length > 0) return data as BusinessLead[];
+
+      if (!legRes.error && legRes.data) return legRes.data as unknown as BusinessLead[];
     } catch (e) {
       console.warn('Supabase getLeads exception:', e);
     }
@@ -210,12 +211,11 @@ export async function getLeadById(id: string): Promise<BusinessLead | null> {
   const sb = getClient();
   if (sb) {
     try {
-      const { data, error } = await sb.from('business_leads').select('*').eq('id', id).maybeSingle();
-      if (!error && data) return data as BusinessLead;
-
-      // Check legacy leads table as well
       const leg = await sb.from('leads').select('*').eq('id', id).maybeSingle();
       if (!leg.error && leg.data) return leg.data as unknown as BusinessLead;
+
+      const { data, error } = await sb.from('business_leads').select('*').eq('id', id).maybeSingle();
+      if (!error && data) return data as BusinessLead;
     } catch (e) {
       console.warn('Supabase getLeadById exception:', e);
     }
@@ -227,16 +227,26 @@ export async function getLeadByToken(token: string): Promise<BusinessLead | null
   const sb = getClient();
   if (sb) {
     try {
+      // 1. Check primary live leads table by approval_token
+      const leg = await sb.from('leads').select('*').eq('approval_token', token).maybeSingle();
+      if (!leg.error && leg.data) return leg.data as unknown as BusinessLead;
+
+      // 2. Check primary live leads table by id (in case token is a lead UUID)
+      const legId = await sb.from('leads').select('*').eq('id', token).maybeSingle();
+      if (!legId.error && legId.data) return legId.data as unknown as BusinessLead;
+
+      // 3. Fallback to business_leads by approval_token
       const { data, error } = await sb.from('business_leads').select('*').eq('approval_token', token).maybeSingle();
       if (!error && data) return data as BusinessLead;
 
-      const leg = await sb.from('leads').select('*').eq('approval_token', token).maybeSingle();
-      if (!leg.error && leg.data) return leg.data as unknown as BusinessLead;
+      // 4. Fallback to business_leads by id
+      const bizId = await sb.from('business_leads').select('*').eq('id', token).maybeSingle();
+      if (!bizId.error && bizId.data) return bizId.data as BusinessLead;
     } catch (e) {
       console.warn('Supabase getLeadByToken exception:', e);
     }
   }
-  return memStore.leads.find((l) => l.approval_token === token) || null;
+  return memStore.leads.find((l) => l.approval_token === token || l.id === token) || null;
 }
 
 export async function updateLead(id: string, updates: Partial<BusinessLead>): Promise<BusinessLead | null> {
@@ -248,20 +258,18 @@ export async function updateLead(id: string, updates: Partial<BusinessLead>): Pr
   const sb = getClient();
   if (sb) {
     try {
-      const { data, error } = await sb.from('business_leads').update(updated).eq('id', id).select().maybeSingle();
-      if (!error && data) {
-        // Also update legacy leads table if exists
+      const leg = await sb.from('leads').update(updated).eq('id', id).select().maybeSingle();
+      if (!leg.error && leg.data) {
         try {
-          await sb.from('leads').update(updated).eq('id', id);
+          await sb.from('business_leads').update(updated).eq('id', id);
         } catch {
           // ignore
         }
-        return data as BusinessLead;
+        return leg.data as unknown as BusinessLead;
       }
 
-      // If not in business_leads, try updating leads table
-      const leg = await sb.from('leads').update(updated).eq('id', id).select().maybeSingle();
-      if (!leg.error && leg.data) return leg.data as unknown as BusinessLead;
+      const { data, error } = await sb.from('business_leads').update(updated).eq('id', id).select().maybeSingle();
+      if (!error && data) return data as BusinessLead;
     } catch (e) {
       console.warn('Supabase updateLead exception:', e);
     }
