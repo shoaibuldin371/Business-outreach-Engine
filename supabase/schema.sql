@@ -208,7 +208,7 @@ CREATE TABLE IF NOT EXISTS public.automation_settings (
     sender_business TEXT DEFAULT 'Web Development & Client Acquisition',
     admin_notification_email TEXT DEFAULT 'Mshoaibawan371@gmail.com',
     require_email_found BOOLEAN DEFAULT TRUE,
-    require_manual_approval BOOLEAN DEFAULT TRUE,
+    require_manual_approval BOOLEAN DEFAULT FALSE,
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 

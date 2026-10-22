@@ -73,12 +73,13 @@ export async function GET(req: NextRequest) {
 
   const res = await sendPitchToProspect(lead, 'automated_approved');
   if (res.success) {
-    await updateLead(lead.id, { status: 'sent', last_contacted_at: new Date().toISOString() });
-    return new Response(renderHtml('✅ Approved & Sent Successfully!', 'Outreach Delivered', '#10b981', `The proposal for <strong>${lead.business_name}</strong> has been automatically delivered to <code>${lead.email}</code> and archived in Supabase.`, 'Open Web Dashboard', appUrl), {
+    await updateLead(lead.id, { status: 'accepted_by_provider', last_contacted_at: new Date().toISOString() });
+    return new Response(renderHtml('✅ Approved & Delivered to Mail Provider!', 'Outreach Accepted', '#10b981', `The proposal for <strong>${lead.business_name}</strong> was accepted by the email provider for delivery to <code>${lead.email}</code> and archived in Supabase.`, 'Open Web Dashboard', appUrl), {
       headers: { 'Content-Type': 'text/html' },
     });
   } else {
-    await updateLead(lead.id, { status: 'error' });
+    const isBlocked = (res.message || '').includes('blocked') || (res.message || '').includes('rejected') || (res.message || '').includes('550');
+    await updateLead(lead.id, { status: isBlocked ? 'bounced' : 'failed' });
     return new Response(renderHtml('Approved with Delivery Issue', 'Dispatch Issue', '#f59e0b', `Approval was recorded, but sending had an issue: ${res.message}. You can retry from your dashboard.`, 'Open Web Dashboard', appUrl), {
       headers: { 'Content-Type': 'text/html' },
     });

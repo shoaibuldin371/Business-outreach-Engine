@@ -30,8 +30,22 @@ const PARKING_SIGNALS = [
   'sedo domain parking',
 ];
 
+import dns from 'dns';
+const dnsPromises = dns.promises;
+
+const WAF_HEADER_SIGNATURES = [
+  'cloudflare',
+  'cf-ray',
+  'x-amz-cf-id',
+  'akamai',
+  'imperva',
+  'incapsula',
+  'sucuri'
+];
+
 /**
  * Probes an existing candidate URL to test if it is genuinely live, broken, or parked.
+ * Accurately recognizes Cloudflare/WAF HTTP 403/401 as ACTIVE LIVE WEBSITES.
  */
 export async function probeUrl(rawUrl: string): Promise<{
   isLive: boolean;
@@ -45,21 +59,45 @@ export async function probeUrl(rawUrl: string): Promise<{
     cleanUrl = `https://${cleanUrl}`;
   }
 
+  let domain = '';
+  try {
+    const parsed = new URL(cleanUrl);
+    domain = parsed.hostname;
+  } catch {
+    domain = cleanUrl.replace(/^https?:\/\//, '').split('/')[0];
+  }
+
+  // Pre-check DNS resolution
+  let dnsResolved = false;
+  if (domain) {
+    try {
+      const ips = await dnsPromises.resolve4(domain);
+      if (Array.isArray(ips) && ips.length > 0) {
+        dnsResolved = true;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 7000);
+    const timeout = setTimeout(() => controller.abort(), 8000);
 
     const resp = await fetch(cleanUrl, {
       method: 'GET',
       headers: {
         'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       },
       signal: controller.signal,
       redirect: 'follow',
     });
     clearTimeout(timeout);
+
+    const serverHeader = (resp.headers.get('server') || '').toLowerCase();
+    const isWaf = WAF_HEADER_SIGNATURES.some((sig) => serverHeader.includes(sig) || resp.headers.has(sig));
 
     if (resp.status >= 200 && resp.status < 400) {
       // Read initial 20KB of text to verify if domain is parked
@@ -75,6 +113,16 @@ export async function probeUrl(rawUrl: string): Promise<{
       };
     }
 
+    // CRITICAL FIX: If HTTP 403 or 401 is returned by Cloudflare/WAF, the website IS LIVE!
+    if ([401, 403, 406, 429].includes(resp.status) && (isWaf || dnsResolved)) {
+      return {
+        isLive: true,
+        httpStatus: resp.status,
+        finalUrl: resp.url,
+        isParked: false,
+      };
+    }
+
     return {
       isLive: false,
       httpStatus: resp.status,
@@ -82,6 +130,7 @@ export async function probeUrl(rawUrl: string): Promise<{
       isParked: false,
     };
   } catch (e: any) {
+    // If connection timed out or was refused but domain has active DNS, flag with error
     return {
       isLive: false,
       isParked: false,
@@ -89,6 +138,7 @@ export async function probeUrl(rawUrl: string): Promise<{
     };
   }
 }
+
 
 /**
  * Searches the web for a business when no website was present in the directory,

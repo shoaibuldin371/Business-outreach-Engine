@@ -28,11 +28,12 @@ export async function POST(req: NextRequest) {
 
     const res = await sendPitchToProspect(lead, 'automated_approved');
     if (res.success) {
-      await updateLead(lead.id, { status: 'sent', last_contacted_at: new Date().toISOString() });
-      return NextResponse.json({ status: 'success', message: `Approved and sent to ${lead.business_name}.` });
+      await updateLead(lead.id, { status: 'accepted_by_provider', last_contacted_at: new Date().toISOString() });
+      return NextResponse.json({ status: 'success', message: `Approved and accepted by provider for ${lead.business_name}.` });
     } else {
-      await updateLead(lead.id, { status: 'error' });
-      return NextResponse.json({ status: 'error', message: `Approved, but sending encountered an issue: ${res.message}` });
+      const isBlocked = (res.message || '').includes('blocked') || (res.message || '').includes('rejected') || (res.message || '').includes('550');
+      await updateLead(lead.id, { status: isBlocked ? 'bounced' : 'failed' });
+      return NextResponse.json({ status: 'error', message: `Approved, but sending encountered an issue: ${res.message}` }, { status: 400 });
     }
   } else if (action === 'reject') {
     await updateLead(lead.id, { status: 'rejected' });

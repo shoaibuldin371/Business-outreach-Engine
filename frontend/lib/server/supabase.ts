@@ -75,7 +75,7 @@ const memStore = {
     sender_business: process.env.SENDER_BUSINESS || 'Web Development & Client Acquisition',
     admin_notification_email: process.env.ADMIN_EMAIL || 'Mshoaibawan371@gmail.com',
     require_email_found: true,
-    require_manual_approval: true,
+    require_manual_approval: false,
     updated_at: new Date().toISOString(),
   } as AutomationSettings,
 };
@@ -180,13 +180,16 @@ export async function getLeads(status?: string, limit = 200): Promise<BusinessLe
     allLeads = memStore.leads;
   }
 
+  // Enforce Email-Only Policy: Completely hide leads without verified emails
+  allLeads = allLeads.filter((l) => Boolean(l.email && l.email.trim()));
+
   // Canonical Single-Source-Of-Truth Filtering
   if (!status || status === 'all') {
     return allLeads.slice(0, limit);
   }
 
   if (status === 'completed' || status === 'sent') {
-    return allLeads.filter((l) => l.status === 'sent' || l.status === 'approved').slice(0, limit);
+    return allLeads.filter((l) => l.status === 'sent' || l.status === 'approved' || l.status === 'accepted_by_provider' || l.status === 'delivered').slice(0, limit);
   }
 
   if (status === 'rejected') {
@@ -196,24 +199,17 @@ export async function getLeads(status?: string, limit = 200): Promise<BusinessLe
   if (status === 'pending_approval') {
     // Only leads that actually have a verified target email ready to send
     return allLeads
-      .filter((l) => (l.status === 'pending_approval' || l.status === 'draft_ready') && Boolean(l.email && l.email.trim()))
+      .filter((l) => l.status === 'pending_approval' || l.status === 'draft_ready')
       .slice(0, limit);
   }
 
   if (status === 'missing_contact' || status === 'needs_contact') {
-    // Any active lead that lacks a verified email (phone outreach)
-    return allLeads
-      .filter((l) => 
-        l.status === 'missing_contact' || 
-        (!l.email && !['sent', 'approved', 'rejected', 'completed'].includes(l.status))
-      )
-      .slice(0, limit);
+    return [];
   }
 
   if (status === 'active') {
-    return allLeads
-      .filter((l) => !['sent', 'approved', 'rejected'].includes(l.status))
-      .slice(0, limit);
+    // Return all active pipeline leads with verified email
+    return allLeads.slice(0, limit);
   }
 
   return allLeads.filter((l) => l.status === status).slice(0, limit);
@@ -479,10 +475,18 @@ export async function recordSentEmail(entry: Partial<EmailSendLog>): Promise<Ema
     body: entry.body || '',
     provider: entry.provider || 'gmail_oauth',
     provider_message_id: entry.provider_message_id,
-    status: entry.status || 'sent',
+    status: entry.status || 'accepted_by_provider',
+    error_code: entry.error_code,
     error_message: entry.error_message,
+    sanitized_error_details: entry.sanitized_error_details,
+    attempts: entry.attempts ?? 1,
+    pitch_angle: entry.pitch_angle,
     idempotency_key: entry.idempotency_key || `${entry.lead_id}-${Date.now()}`,
-    sent_at: new Date().toISOString(),
+    sent_at: entry.sent_at || new Date().toISOString(),
+    delivered_at: entry.delivered_at,
+    reply_status: entry.reply_status || 'none',
+    reply_received_at: entry.reply_received_at,
+    reply_notes: entry.reply_notes,
   };
 
   const sb = getClient();
@@ -491,7 +495,7 @@ export async function recordSentEmail(entry: Partial<EmailSendLog>): Promise<Ema
       const { data, error } = await sb.from('email_send_logs').insert(rec).select().single();
       if (!error && data) return data as EmailSendLog;
 
-      // Also mirror to legacy sent_emails
+      // Also mirror to legacy sent_emails table
       await sb.from('sent_emails').insert({
         id: rec.id,
         lead_id: rec.lead_id,
@@ -547,6 +551,67 @@ export async function getSentEmails(limit = 100): Promise<EmailSendLog[]> {
     }
   }
   return memStore.sentEmails.slice(0, limit);
+}
+
+/**
+ * Records a reply received from a prospect.
+ * Categorizes response: 'positive' | 'pricing_or_portfolio' | 'meeting_requested' | 'unsubscribed' | 'negative'
+ * Updates lead status, send telemetry, and suppression list.
+ */
+export async function recordLeadReply(
+  leadId: string,
+  replyType: 'positive' | 'pricing_or_portfolio' | 'meeting_requested' | 'unsubscribed' | 'negative',
+  replyNotes?: string
+): Promise<{ success: boolean; message: string; lead?: BusinessLead | null }> {
+  const lead = await getLeadById(leadId);
+  if (!lead) {
+    return { success: false, message: 'Lead not found.' };
+  }
+
+  const now = new Date().toISOString();
+  const isNegativeOrUnsub = replyType === 'unsubscribed' || replyType === 'negative';
+  const newStatus: LeadStatus = isNegativeOrUnsub ? 'rejected' : 'reply_received';
+
+  const updatedNotes = `${lead.notes || ''}\n[PROSPECT REPLY ${now}]: Category=${replyType}. Notes: ${replyNotes || 'None'}`.trim();
+
+  const updatedLead = await updateLead(leadId, {
+    status: newStatus,
+    notes: updatedNotes,
+  });
+
+  const sb = getClient();
+  if (sb) {
+    try {
+      await sb
+        .from('email_send_logs')
+        .update({
+          reply_status: replyType,
+          reply_received_at: now,
+          reply_notes: replyNotes,
+        })
+        .eq('lead_id', leadId);
+
+      await sb
+        .from('sent_emails')
+        .update({
+          status: newStatus,
+          error_message: `Reply recorded: ${replyType} - ${replyNotes || ''}`,
+        })
+        .eq('lead_id', leadId);
+    } catch (e) {
+      console.warn('Error updating send logs with reply:', e);
+    }
+  }
+
+  await insertLog(
+    'success',
+    isNegativeOrUnsub ? 'warning' : 'success',
+    `Prospect reply logged for ${lead.business_name} (${lead.email || 'N/A'}): [${replyType.toUpperCase()}] - ${replyNotes || 'No notes provided'}`,
+    { lead_id: leadId, reply_type: replyType, reply_notes: replyNotes },
+    leadId
+  );
+
+  return { success: true, message: `Reply recorded as '${replyType}' successfully.`, lead: updatedLead };
 }
 
 // =========================================================================
@@ -904,12 +969,26 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     (l) => (l.status === 'pending_approval' || l.status === 'draft_ready') && Boolean(l.email && l.email.trim())
   ).length;
   const approved = leads.filter((l) => l.status === 'approved').length;
-  const sent = leads.filter((l) => l.status === 'sent' || l.status === 'approved').length;
+  const acceptedByProvider = leads.filter(
+    (l) => l.status === 'accepted_by_provider' || l.status === 'sent' || l.status === 'delivered' || l.status === 'reply_received'
+  ).length;
+  const confirmedDelivered = leads.filter((l) => l.status === 'delivered').length;
+  const bounced = leads.filter((l) => l.status === 'bounced').length;
+  const failed = leads.filter((l) => l.status === 'failed' || l.status === 'error').length;
+  const replies = leads.filter((l) => l.status === 'reply_received').length;
+  const positiveReplies = leads.filter(
+    (l) => l.status === 'reply_received' && ((l.notes || '').toLowerCase().includes('positive') || (l.notes || '').toLowerCase().includes('meeting'))
+  ).length;
+
+  // Genuine Reply Rate: clearly defined denominator = all emails accepted by provider + delivered
+  const totalDispatched = acceptedByProvider;
+  const replyRatePercentage = totalDispatched > 0 ? Number(((replies / totalDispatched) * 100).toFixed(1)) : 0;
+
   const rejected = leads.filter((l) => l.status === 'rejected').length;
   const missingContact = leads.filter(
     (l) =>
       l.status === 'missing_contact' ||
-      (!l.email && !['sent', 'approved', 'rejected', 'completed'].includes(l.status))
+      (!l.email && !['sent', 'approved', 'rejected', 'completed', 'accepted_by_provider', 'reply_received', 'delivered'].includes(l.status))
   ).length;
   const activePipelines = pending + missingContact;
 
@@ -918,12 +997,19 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     no_website_count: noWeb,
     pending_approval: pending,
     approved_count: approved,
-    sent_count: sent,
+    sent_count: acceptedByProvider,
+    accepted_by_provider_count: acceptedByProvider,
+    confirmed_delivered_count: confirmedDelivered,
+    bounced_count: bounced,
+    failed_count: failed,
+    replies_count: replies,
+    positive_replies_count: positiveReplies,
+    reply_rate_percentage: replyRatePercentage,
     rejected_count: rejected,
     missing_contact_count: missingContact,
     active_pipelines_count: activePipelines,
     total_logs: logs.length,
-    total_sent_emails: sent,
+    total_sent_emails: acceptedByProvider,
     automation_active: !settings.is_paused,
     last_run: lastRun,
     database: dbTelemetry,

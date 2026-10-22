@@ -15,9 +15,27 @@ export interface Lead {
   notes?: string;
   email_subject?: string;
   email_body?: string;
-  status: 'pending_approval' | 'approved' | 'rejected' | 'sent' | 'error' | 'missing_contact' | 'draft_ready' | 'qualified' | 'discovered';
+  status:
+    | 'pending_approval'
+    | 'approved'
+    | 'rejected'
+    | 'sent'
+    | 'accepted_by_provider'
+    | 'delivered'
+    | 'bounced'
+    | 'failed'
+    | 'reply_received'
+    | 'missing_contact'
+    | 'draft_ready'
+    | 'qualified'
+    | 'discovered'
+    | 'error';
   approval_token?: string;
   source?: string;
+  provider_message_id?: string;
+  pitch_angle?: string;
+  reply_status?: string;
+  reply_received_at?: string;
   created_at?: string;
   last_contacted_at?: string;
 }
@@ -56,6 +74,13 @@ export interface Stats {
   pending_approval: number;
   rejected_count: number;
   sent_count: number;
+  accepted_by_provider_count?: number;
+  confirmed_delivered_count?: number;
+  bounced_count?: number;
+  failed_count?: number;
+  replies_count?: number;
+  positive_replies_count?: number;
+  reply_rate_percentage?: number;
   missing_contact_count?: number;
   active_pipelines_count?: number;
   total_logs: number;
@@ -154,4 +179,36 @@ export async function patchLead(id: string, updates: Partial<Lead>): Promise<Lea
   if (!res.ok) throw new Error('Failed to update lead');
   return res.json();
 }
+
+export async function recordLeadReply(
+  leadId: string,
+  payload: { reply_type: string; notes?: string }
+): Promise<any> {
+  const res = await fetch(`${API_BASE}/api/leads/${leadId}/reply`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Failed to record reply' }));
+    throw new Error(err.error || 'Failed to record reply');
+  }
+  return res.json();
+}
+
+export async function fetchDeliverabilityReport(): Promise<any> {
+  const res = await fetch(`${API_BASE}/api/health/deliverability`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Failed to fetch deliverability report');
+  return res.json();
+}
+
+export async function runSafePreflightTest(): Promise<any> {
+  const res = await fetch(`${API_BASE}/api/health/deliverability`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) throw new Error('Safe preflight connection test failed');
+  return res.json();
+}
+
 

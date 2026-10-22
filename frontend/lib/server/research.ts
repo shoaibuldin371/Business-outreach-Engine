@@ -213,7 +213,7 @@ async function searchPublicContactDetails(
   // NEVER synthesize or guess role mailboxes (e.g. contact@domain) because unconfigured mailboxes bounce (550 Recipient rejected).
   if (email) {
     const lower = email.toLowerCase().trim();
-    if (lower.includes('mshoaibawan371') || lower.includes('shoaib')) {
+    if (lower.includes('mshoaibuldin371') || lower.includes('mshoaibawan371') || lower.includes('shoaib')) {
       email = undefined;
     }
   }

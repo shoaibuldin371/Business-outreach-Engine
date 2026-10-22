@@ -46,6 +46,7 @@ async function cleanFakeLeads() {
       lead.email.includes('.net') ||
       lead.email.includes('.biz') ||
       lead.email.includes('.org') ||
+      lead.email.includes('Mshoaibuldin371@gmail.com') ||
       lead.email.includes('Mshoaibawan371@gmail.com') ||
       lead.email.includes('non-existent')
     );

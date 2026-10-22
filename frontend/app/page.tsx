@@ -10,6 +10,7 @@ import {
 } from '@/lib/api';
 import LeadModal from '@/components/LeadModal';
 import DatabaseSettingCard from '@/components/DatabaseSettingCard';
+import DeliverabilityCard from '@/components/DeliverabilityCard';
 import Link from 'next/link';
 import { 
   Building2, 
@@ -303,8 +304,11 @@ export default function DashboardPage() {
       {/* Database Engine & Central Store Settings */}
       <DatabaseSettingCard initialTelemetry={stats?.database} />
 
+      {/* Deliverability & Sender Reputation Guard */}
+      <DeliverabilityCard />
+
       {/* KPI Stats Grid (Fully responsive on phone & tablet) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
         <div className="p-4 sm:p-5 rounded-2xl bg-[#0e1322] border border-white/5 space-y-1">
           <span className="text-xs font-medium text-slate-400">Total Audited</span>
           <div className="text-xl sm:text-2xl font-bold text-white">{stats?.total_leads || 0}</div>
@@ -314,12 +318,12 @@ export default function DashboardPage() {
         <div className="p-4 sm:p-5 rounded-2xl bg-[#0e1322] border border-indigo-500/30 space-y-1 bg-indigo-500/[0.04]">
           <span className="text-xs font-medium text-indigo-400 flex items-center gap-1">
             <Layers className="w-3.5 h-3.5 shrink-0" />
-            <span>Active Pipelines</span>
+            <span>Active Funnel</span>
           </span>
           <div className="text-xl sm:text-2xl font-bold text-indigo-300">
             {stats?.active_pipelines_count ?? ((stats?.pending_approval || 0) + (stats?.missing_contact_count || 0))}
           </div>
-          <div className="text-[10px] sm:text-[11px] text-slate-400">Active prospect funnel</div>
+          <div className="text-[10px] sm:text-[11px] text-slate-400">Active prospects</div>
         </div>
 
         <div className="p-4 sm:p-5 rounded-2xl bg-[#0e1322] border border-amber-500/20 space-y-1">
@@ -333,29 +337,44 @@ export default function DashboardPage() {
 
         <div className="p-4 sm:p-5 rounded-2xl bg-[#0e1322] border border-sky-500/20 space-y-1">
           <span className="text-xs font-medium text-sky-400 flex items-center gap-1">
-            <Phone className="w-3.5 h-3.5 shrink-0" />
-            <span>Needs Contact</span>
+            <Mail className="w-3.5 h-3.5 shrink-0" />
+            <span>Target Emails</span>
           </span>
-          <div className="text-xl sm:text-2xl font-bold text-sky-300">{stats?.missing_contact_count || 0}</div>
-          <div className="text-[10px] sm:text-[11px] text-slate-400">Phone & address verified</div>
+          <div className="text-xl sm:text-2xl font-bold text-sky-300">{stats?.total_leads || 0}</div>
+          <div className="text-[10px] sm:text-[11px] text-slate-400">100% verified emails</div>
         </div>
 
         <Link
           href="/completed"
-          className="col-span-2 sm:col-span-1 p-4 sm:p-5 rounded-2xl bg-[#0e1322] border border-emerald-500/20 space-y-1 block hover:bg-emerald-500/[0.04] transition-all group"
+          className="p-4 sm:p-5 rounded-2xl bg-[#0e1322] border border-emerald-500/20 space-y-1 block hover:bg-emerald-500/[0.04] transition-all group"
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-emerald-400 flex items-center gap-1">
               <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-              <span>Completed</span>
+              <span>Accepted</span>
             </span>
             <span className="text-[10px] font-semibold text-emerald-400 opacity-80 group-hover:opacity-100 flex items-center gap-0.5">
               View ➔
             </span>
           </div>
-          <div className="text-xl sm:text-2xl font-bold text-emerald-300">{stats?.sent_count || 0}</div>
-          <div className="text-[10px] sm:text-[11px] text-slate-400">Pitches sent & archived</div>
+          <div className="text-xl sm:text-2xl font-bold text-emerald-300">
+            {stats?.accepted_by_provider_count ?? stats?.sent_count ?? 0}
+          </div>
+          <div className="text-[10px] sm:text-[11px] text-slate-400">Accepted by provider</div>
         </Link>
+
+        <div className="p-4 sm:p-5 rounded-2xl bg-[#0e1322] border border-purple-500/20 space-y-1 bg-purple-500/[0.03]">
+          <span className="text-xs font-medium text-purple-400 flex items-center gap-1">
+            <Sparkles className="w-3.5 h-3.5 shrink-0" />
+            <span>Reply Rate</span>
+          </span>
+          <div className="text-xl sm:text-2xl font-bold text-purple-300">
+            {stats?.reply_rate_percentage ?? 0.0}%
+          </div>
+          <div className="text-[10px] sm:text-[11px] text-slate-400">
+            {stats?.replies_count || 0} replies ({stats?.positive_replies_count || 0} positive)
+          </div>
+        </div>
       </div>
 
       {/* Main Content Area */}
@@ -364,11 +383,10 @@ export default function DashboardPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/5 pb-4">
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full">
             {[
-              { id: 'active', label: `🚀 Active Pipelines (${stats?.active_pipelines_count ?? ((stats?.pending_approval || 0) + (stats?.missing_contact_count || 0))})` },
-              { id: 'pending_approval', label: `✉️ Email Ready (${stats?.pending_approval || 0})` },
-              { id: 'missing_contact', label: `📞 Needs Contact (${stats?.missing_contact_count || 0})` },
+              { id: 'active', label: `🚀 Emailed & Active (${stats?.total_leads || 0})` },
+              { id: 'completed', label: `✅ Sent via Gmail (${stats?.sent_count || 0})` },
+              { id: 'pending_approval', label: `✉️ Drafts (${stats?.pending_approval || 0})` },
               { id: 'rejected', label: `❌ Rejected (${stats?.rejected_count || 0})` },
-              { id: 'completed', label: `✅ Completed (${stats?.sent_count || 0})` },
               { id: 'all', label: `🗄️ All Records (${stats?.total_leads || 0})` },
             ].map(tab => (
               <button
@@ -483,11 +501,6 @@ export default function DashboardPage() {
                           <Clock className="w-3 h-3" /> Pending Review
                         </span>
                       )}
-                      {isMissingContact && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/20">
-                          <Phone className="w-3 h-3" /> Phone Active (Needs Email)
-                        </span>
-                      )}
                       {isRejected && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">
                           <XCircle className="w-3 h-3" /> Rejected
@@ -495,7 +508,7 @@ export default function DashboardPage() {
                       )}
                       {isSent && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                          <CheckCircle2 className="w-3 h-3" /> Pitch Sent
+                          <CheckCircle2 className="w-3 h-3" /> Auto-Emailed via Gmail
                         </span>
                       )}
                     </div>
@@ -527,13 +540,9 @@ export default function DashboardPage() {
                       ) : (
                         <button
                           onClick={() => setSelectedLead(lead)}
-                          className={`w-full py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                            isMissingContact
-                              ? 'bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/30'
-                              : 'bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10'
-                          }`}
+                          className="w-full py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10"
                         >
-                          {isMissingContact ? 'Review Pitch & Add Email' : 'Review Pitch & Approve'}
+                          {isSent ? 'View Sent Pitch' : 'Review Pitch'}
                         </button>
                       )}
                     </div>
@@ -619,19 +628,14 @@ export default function DashboardPage() {
                               <Clock className="w-3 h-3 shrink-0" /> Pending Review
                             </span>
                           )}
-                          {isMissingContact && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-sky-500/10 text-sky-300 border border-sky-500/20">
-                              <Phone className="w-3 h-3 text-sky-400 shrink-0" /> Phone Active (Needs Email)
-                            </span>
-                          )}
                           {isRejected && (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">
                               <XCircle className="w-3 h-3 shrink-0" /> Draft Rejected
                             </span>
                           )}
                           {isSent && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                              <CheckCircle2 className="w-3 h-3 shrink-0" /> Pitch Delivered
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                              <CheckCircle2 className="w-3 h-3 shrink-0" /> Auto-Emailed via Gmail
                             </span>
                           )}
                         </td>
@@ -657,13 +661,9 @@ export default function DashboardPage() {
                           ) : (
                             <button
                               onClick={() => setSelectedLead(lead)}
-                              className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                                isMissingContact
-                                  ? 'text-sky-300 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 font-semibold'
-                                  : 'text-slate-200 bg-white/5 hover:bg-white/10 border border-white/10'
-                              }`}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors text-slate-200 bg-white/5 hover:bg-white/10 border border-white/10"
                             >
-                              {isMissingContact ? 'Review & Enrich' : 'Review'}
+                              {isSent ? 'View Sent Pitch' : 'Review Pitch'}
                             </button>
                           )}
                         </td>

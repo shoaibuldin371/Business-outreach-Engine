@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Lead, fetchLeads, Stats, fetchStats } from '@/lib/api';
+import LeadModal from '@/components/LeadModal';
 import Link from 'next/link';
 import { 
   CheckCheck, 
@@ -100,30 +101,38 @@ export default function CompletedOutreachPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         <div className="p-4 sm:p-5 rounded-2xl bg-[#0e1322] border border-emerald-500/20 space-y-1">
           <span className="text-xs font-medium text-emerald-400 flex items-center gap-1.5">
-            <CheckCircle2 className="w-4 h-4" /> Delivered Pitches
+            <CheckCircle2 className="w-4 h-4" /> Accepted Pitches
           </span>
           <div className="text-xl sm:text-2xl font-bold text-white">{leads.length}</div>
-          <div className="text-[10px] sm:text-[11px] text-slate-400">Sent to prospects</div>
+          <div className="text-[10px] sm:text-[11px] text-slate-400">Accepted by provider</div>
         </div>
 
-        <div className="p-4 sm:p-5 rounded-2xl bg-[#0e1322] border border-white/5 space-y-1">
-          <span className="text-xs font-medium text-slate-400">Active Queue</span>
-          <div className="text-xl sm:text-2xl font-bold text-amber-300">{stats?.pending_approval || 0}</div>
-          <div className="text-[10px] sm:text-[11px] text-slate-400">Waiting approval</div>
-        </div>
-
-        <div className="p-4 sm:p-5 rounded-2xl bg-[#0e1322] border border-white/5 space-y-1">
-          <span className="text-xs font-medium text-slate-400">Audited Businesses</span>
-          <div className="text-xl sm:text-2xl font-bold text-white">{stats?.total_leads || 0}</div>
-          <div className="text-[10px] sm:text-[11px] text-slate-400">In database</div>
-        </div>
-
-        <div className="p-4 sm:p-5 rounded-2xl bg-[#0e1322] border border-white/5 space-y-1">
-          <span className="text-xs font-medium text-emerald-400 flex items-center gap-1.5">
-            <CheckCircle2 className="w-4 h-4" /> Delivery Channel
+        <div className="p-4 sm:p-5 rounded-2xl bg-[#0e1322] border border-indigo-500/20 space-y-1">
+          <span className="text-xs font-medium text-indigo-400 flex items-center gap-1.5">
+            <Mail className="w-4 h-4" /> Replies Received
           </span>
-          <div className="text-xs sm:text-sm font-bold text-slate-200 truncate">Gmail API (Verified)</div>
-          <div className="text-[10px] sm:text-[11px] text-emerald-400 truncate">● MX Pre-flight Guard Active</div>
+          <div className="text-xl sm:text-2xl font-bold text-indigo-300">{stats?.replies_count || 0}</div>
+          <div className="text-[10px] sm:text-[11px] text-slate-400">Tracked prospect responses</div>
+        </div>
+
+        <div className="p-4 sm:p-5 rounded-2xl bg-[#0e1322] border border-purple-500/20 space-y-1">
+          <span className="text-xs font-medium text-purple-400 flex items-center gap-1.5">
+            <Sparkles className="w-4 h-4" /> Positive Interest
+          </span>
+          <div className="text-xl sm:text-2xl font-bold text-purple-300">{stats?.positive_replies_count || 0}</div>
+          <div className="text-[10px] sm:text-[11px] text-slate-400">Calls or estimates requested</div>
+        </div>
+
+        <div className="p-4 sm:p-5 rounded-2xl bg-[#0e1322] border border-emerald-500/20 space-y-1 bg-emerald-500/[0.03]">
+          <span className="text-xs font-medium text-emerald-400 flex items-center gap-1.5">
+            <CheckCheck className="w-4 h-4" /> Genuine Reply Rate
+          </span>
+          <div className="text-xl sm:text-2xl font-bold text-emerald-300">
+            {stats?.reply_rate_percentage ?? 0.0}%
+          </div>
+          <div className="text-[10px] sm:text-[11px] text-slate-400 truncate">
+            Denominator: {stats?.accepted_by_provider_count || leads.length} delivered
+          </div>
         </div>
       </div>
 
@@ -339,71 +348,13 @@ export default function CompletedOutreachPage() {
         )}
       </div>
 
-      {/* Modal for viewing the delivered pitch (Mobile Responsive) */}
+      {/* Modal for viewing the delivered pitch & logging responses */}
       {selectedLead && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
-          <div className="bg-[#0e1322] border border-white/10 rounded-2xl max-w-2xl w-full p-4 sm:p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-start justify-between shrink-0">
-              <div className="min-w-0 flex-1 pr-2">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    Delivered Pitch
-                  </span>
-                  <span className="text-[11px] text-slate-400">
-                    {selectedLead.last_contacted_at ? new Date(selectedLead.last_contacted_at).toLocaleString() : ''}
-                  </span>
-                </div>
-                <h3 className="text-base sm:text-lg font-bold text-white mt-1 truncate">
-                  {selectedLead.business_name}
-                </h3>
-                <p className="text-xs text-slate-400 truncate">
-                  Recipient: <span className="text-slate-200 font-mono">{selectedLead.email}</span>
-                </p>
-              </div>
-              <button 
-                onClick={() => setSelectedLead(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors shrink-0"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-1.5 shrink-0">
-              <label className="text-xs font-semibold text-slate-300">Email Subject</label>
-              <div className="p-2.5 sm:p-3 bg-slate-950/80 border border-white/10 rounded-xl text-xs font-medium text-slate-200 break-words">
-                {selectedLead.email_subject}
-              </div>
-            </div>
-
-            <div className="space-y-1.5 flex-1 min-h-0 flex flex-col">
-              <label className="text-xs font-semibold text-slate-300">Delivered Pitch Body</label>
-              <div className="p-3 sm:p-4 bg-slate-950/80 border border-white/10 rounded-xl text-xs leading-relaxed text-slate-300 font-mono whitespace-pre-wrap overflow-y-auto flex-1">
-                {selectedLead.email_body}
-              </div>
-            </div>
-
-            <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-white/5 shrink-0">
-              <div className="text-[10px] sm:text-[11px] text-slate-400 truncate">
-                Sender: Muhammad Shoaib (Mshoaibawan371@gmail.com)
-              </div>
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <Link
-                  href={`/custom-email?leadId=${selectedLead.id}&mode=followup`}
-                  className="flex-1 sm:flex-initial px-3 sm:px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition-colors flex items-center justify-center gap-1.5"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  Follow-Up
-                </Link>
-                <button
-                  onClick={() => setSelectedLead(null)}
-                  className="px-3 sm:px-4 py-2 rounded-xl text-xs font-medium bg-white/5 hover:bg-white/10 text-slate-300 transition-colors"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <LeadModal
+          lead={selectedLead}
+          onClose={() => setSelectedLead(null)}
+          onActionComplete={loadCompletedLeads}
+        />
       )}
     </div>
   );

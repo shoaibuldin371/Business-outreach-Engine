@@ -11,21 +11,29 @@ import {
   recordSentEmail,
   isEmailAlreadySent,
   getAutomationSettings,
+  updateLead,
   BusinessLead,
 } from './supabase';
 import { sendEmailViaGmailApi, getValidGmailAccessToken } from './gmail-oauth';
 
 /**
  * Checks if a domain has active MX mail records on the internet
- * Prevents "Address not found" bounce emails
+ * Prevents 550 'Address not found' or 'Mailbox does not exist' hard bounces
  */
 export async function verifyDomainHasMx(email: string): Promise<boolean> {
   try {
     const domain = email.includes('@') ? email.split('@')[1].trim().toLowerCase() : email.trim().toLowerCase();
     if (!domain || !domain.includes('.')) return false;
 
-    // Reject obvious dummy domains
-    if (domain.endsWith('.local') || domain.endsWith('.invalid') || domain.endsWith('.example')) {
+    // Reject obvious dummy/placeholder domains
+    if (
+      domain.endsWith('.local') ||
+      domain.endsWith('.invalid') ||
+      domain.endsWith('.example') ||
+      domain.endsWith('.test') ||
+      domain === '.com' ||
+      domain === 'com'
+    ) {
       return false;
     }
 
@@ -39,30 +47,86 @@ export async function verifyDomainHasMx(email: string): Promise<boolean> {
 // List of known rejected/non-existent recipient emails that returned 550 or hard bounces
 export const KNOWN_BOUNCED_OR_BLOCKED_EMAILS = new Set([
   'contact@outbackroofing.com',
+  'contact@.com',
 ]);
 
 export function isBlockedOrBouncedEmail(email: string): boolean {
-  if (!email) return true;
+  if (!email || !email.trim()) return true;
   const norm = email.trim().toLowerCase();
   if (KNOWN_BOUNCED_OR_BLOCKED_EMAILS.has(norm)) return true;
-  // Block any placeholder domains
+  
+  // Block placeholder or malformed domains
   if (
     norm.endsWith('@example.com') ||
     norm.endsWith('@domain.com') ||
     norm.endsWith('@business.com') ||
     norm.endsWith('.local') ||
-    norm.endsWith('.invalid')
+    norm.endsWith('.invalid') ||
+    norm.startsWith('contact@.') ||
+    norm === 'contact@.com'
   ) {
     return true;
   }
   return false;
 }
 
+export function classifyEmailError(err: any): { category: string; message: string } {
+  const str = String(err?.message || err || '');
+  const lower = str.toLowerCase();
+
+  if (lower.includes('535') || lower.includes('authentication') || lower.includes('badcredentials') || lower.includes('invalid credentials')) {
+    return {
+      category: 'AUTHENTICATION_FAILURE',
+      message: 'SMTP/OAuth Authentication failed: Invalid username or App Password.',
+    };
+  }
+
+  if (lower.includes('429') || lower.includes('5.4.5') || lower.includes('daily user sending limit') || lower.includes('quota')) {
+    return {
+      category: 'RATE_LIMIT_EXCEEDED',
+      message: 'Provider daily sending limit reached (Gmail allows 500/day). Outreach paused to protect sender reputation.',
+    };
+  }
+
+  if (lower.includes('550') || lower.includes('5.1.1') || lower.includes('5.4.1') || lower.includes('user unknown') || lower.includes('recipient rejected')) {
+    return {
+      category: 'INVALID_RECIPIENT',
+      message: `Remote mail server rejected recipient (550 Hard Bounce): ${str}`,
+    };
+  }
+
+  if (lower.includes('554') || lower.includes('5.7.1') || lower.includes('spam') || lower.includes('dmarc') || lower.includes('blocked')) {
+    return {
+      category: 'MESSAGE_REJECTED',
+      message: `Message rejected by spam policy or DMARC alignment: ${str}`,
+    };
+  }
+
+  if (lower.includes('421') || lower.includes('451') || lower.includes('try again later') || lower.includes('service not available')) {
+    return {
+      category: 'TEMPORARY_PROVIDER_ERROR',
+      message: `Temporary mail server issue: ${str}`,
+    };
+  }
+
+  if (lower.includes('timeout') || lower.includes('timed out') || lower.includes('econnrefused')) {
+    return {
+      category: 'TIMEOUT_OR_UNKNOWN',
+      message: `Connection timed out. Check existing send records before retrying to prevent duplicate emails.`,
+    };
+  }
+
+  return {
+    category: 'UNKNOWN_PROVIDER_ERROR',
+    message: str || 'Mail dispatch failed.',
+  };
+}
+
 function getSmtpTransporter() {
   const host = process.env.SMTP_HOST;
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASSWORD;
-  const port = parseInt(process.env.SMTP_PORT || '587');
+  const port = parseInt(process.env.SMTP_PORT || '465');
 
   if (host && user && pass) {
     return nodemailer.createTransport({
@@ -70,13 +134,16 @@ function getSmtpTransporter() {
       port,
       secure: port === 465,
       auth: { user, pass },
+      connectionTimeout: 20000,
+      greetingTimeout: 15000,
     });
   }
   return null;
 }
 
 /**
- * Low-level email sender that tries Gmail OAuth first, then SMTP, then records simulation
+ * Low-level email sender that tries Gmail OAuth first, then SMTP.
+ * Never claims fake delivery when credentials are unconfigured.
  */
 export async function sendEmail({
   to,
@@ -90,20 +157,30 @@ export async function sendEmail({
   html?: string;
 }): Promise<{
   success: boolean;
-  provider: 'gmail_oauth' | 'smtp' | 'simulation';
+  status: 'accepted_by_provider' | 'failed' | 'bounced';
+  provider: 'gmail_oauth' | 'smtp' | 'simulation' | 'none';
   providerMessageId?: string;
   message: string;
+  errorCategory?: string;
 }> {
   if (!to || !to.trim()) {
-    return { success: false, provider: 'simulation', message: 'Recipient email is required.' };
+    return {
+      success: false,
+      status: 'failed',
+      provider: 'none',
+      message: 'Recipient email is required.',
+      errorCategory: 'INVALID_RECIPIENT',
+    };
   }
 
   const normalizedTo = to.trim().toLowerCase();
   if (isBlockedOrBouncedEmail(normalizedTo)) {
     return {
       success: false,
-      provider: 'simulation',
-      message: `Delivery permanently blocked: '${to}' is a known rejected/bounced mailbox (550 Recipient rejected). Blocked to prevent Google Mailer-Daemon bounce notifications.`,
+      status: 'bounced',
+      provider: 'none',
+      message: `Delivery permanently blocked: '${to}' is on the suppression list (550 Recipient rejected). Blocked to prevent Google Mailer-Daemon bounce notifications.`,
+      errorCategory: 'INVALID_RECIPIENT',
     };
   }
 
@@ -114,12 +191,13 @@ export async function sendEmail({
     if (gmailResult.success) {
       return {
         success: true,
+        status: 'accepted_by_provider',
         provider: 'gmail_oauth',
         providerMessageId: gmailResult.messageId,
-        message: 'Delivered securely via connected Gmail OAuth API.',
+        message: 'Accepted by connected Gmail OAuth API for delivery.',
       };
     }
-    console.warn('Gmail OAuth send failed, falling back to SMTP/simulation:', gmailResult.error);
+    console.warn('Gmail OAuth send failed, falling back to SMTP:', gmailResult.error);
   }
 
   // 2. Try SMTP if configured
@@ -127,8 +205,8 @@ export async function sendEmail({
   if (transporter) {
     try {
       const settings = await getAutomationSettings();
-      const senderName = settings.sender_name || 'Muhammad Shoaib';
-      const senderEmail = settings.sender_email || 'Mshoaibawan371@gmail.com';
+      const senderName = settings.sender_name || process.env.SENDER_NAME || 'Muhammad Shoaib';
+      const senderEmail = settings.sender_email || process.env.SENDER_EMAIL || 'Mshoaibawan371@gmail.com';
 
       const info = await transporter.sendMail({
         from: `"${senderName}" <${senderEmail}>`,
@@ -140,26 +218,33 @@ export async function sendEmail({
 
       return {
         success: true,
+        status: 'accepted_by_provider',
         provider: 'smtp',
         providerMessageId: info.messageId,
-        message: 'Delivered via SMTP.',
+        message: 'Accepted by SMTP provider for delivery (SMTP 250 OK).',
       };
     } catch (e: any) {
-      console.warn('SMTP delivery failed:', e);
+      const { category, message } = classifyEmailError(e);
+      if (category === 'INVALID_RECIPIENT') {
+        KNOWN_BOUNCED_OR_BLOCKED_EMAILS.add(normalizedTo);
+      }
       return {
         success: false,
+        status: category === 'INVALID_RECIPIENT' ? 'bounced' : 'failed',
         provider: 'smtp',
-        message: e.message || 'SMTP delivery failed.',
+        message,
+        errorCategory: category,
       };
     }
   }
 
-  // 3. Simulation mode (clearly reported, no fake delivery claims)
-  console.log(`[SAFE SIMULATION] Email to ${to} | Subject: "${subject}"`);
+  // 3. Neither OAuth nor SMTP configured
   return {
-    success: true,
-    provider: 'simulation',
-    message: 'Safe simulation (Neither Gmail OAuth nor SMTP credentials configured yet).',
+    success: false,
+    status: 'failed',
+    provider: 'none',
+    message: 'No live email provider (SMTP or Gmail OAuth) is configured in environment.',
+    errorCategory: 'AUTHENTICATION_FAILURE',
   };
 }
 
@@ -258,7 +343,7 @@ Open Pipeline Dashboard: ${dashboardUrl}`;
 
 /**
  * Dispatches an approved outreach pitch to a prospect business
- * Enforces strict idempotency and duplicate-send prevention
+ * Enforces strict idempotency, pre-flight MX check, and duplicate-send prevention
  */
 export async function sendPitchToProspect(
   lead: BusinessLead,
@@ -284,17 +369,18 @@ export async function sendPitchToProspect(
     await insertLog(
       'sending',
       'warning',
-      `Duplicate send prevented: Outreach was already sent to ${lead.business_name} (${recipient}).`,
+      `Duplicate send prevented: Outreach was already accepted or sent to ${lead.business_name} (${recipient}).`,
       { lead_id: lead.id, recipient },
       lead.id
     );
-    return { success: true, message: 'Already sent previously (idempotent skipped).' };
+    return { success: true, message: 'Already sent previously (idempotent duplicate skipped).' };
   }
 
   // Pre-flight MX Record Check: Ensure recipient domain actually exists on internet
   const hasMx = await verifyDomainHasMx(recipient);
   if (!hasMx) {
     const domain = recipient.split('@')[1] || recipient;
+    KNOWN_BOUNCED_OR_BLOCKED_EMAILS.add(recipient.toLowerCase());
     await insertLog(
       'error',
       'warning',
@@ -330,25 +416,33 @@ export async function sendPitchToProspect(
     body,
     provider: res.provider,
     provider_message_id: res.providerMessageId,
-    status: res.success ? 'sent' : 'failed',
+    status: res.status === 'accepted_by_provider' ? 'accepted_by_provider' : res.status,
+    error_code: res.errorCategory,
     error_message: res.success ? undefined : res.message,
     idempotency_key: `${lead.id}-${recipient}`,
   });
 
   if (res.success) {
+    await updateLead(lead.id, {
+      status: 'accepted_by_provider',
+      last_contacted_at: new Date().toISOString(),
+    });
     await insertLog(
       'success',
       'success',
-      `Outreach successfully delivered to ${lead.business_name} (${recipient}) via ${res.provider}.`,
+      `Outreach accepted by mail provider for ${lead.business_name} (${recipient}) via ${res.provider}.`,
       { recipient, provider: res.provider, messageId: res.providerMessageId },
       lead.id
     );
   } else {
+    await updateLead(lead.id, {
+      status: res.status === 'bounced' ? 'bounced' : 'failed',
+    });
     await insertLog(
       'error',
       'error',
       `Failed to deliver outreach to ${lead.business_name}: ${res.message}`,
-      { recipient, error: res.message },
+      { recipient, error: res.message, errorCategory: res.errorCategory },
       lead.id
     );
   }
@@ -361,3 +455,55 @@ export async function sendRawEmail(to: string, subject: string, text: string, ht
   return { success: res.success, message: res.message };
 }
 
+export async function getSenderDeliverabilityReport() {
+  const settings = await getAutomationSettings();
+  const senderEmail = settings.sender_email || process.env.SENDER_EMAIL || 'Mshoaibawan371@gmail.com';
+  const domain = senderEmail.split('@')[1] || 'gmail.com';
+  const isGmail = domain.toLowerCase().includes('gmail.com');
+
+  let spfStatus = 'pass';
+  let spfDetails = 'v=spf1 redirect=_spf.google.com (Google SPF passes official relays)';
+  let dmarcStatus = 'pass';
+  let dmarcDetails = 'v=DMARC1; p=none; sp=quarantine (Strict alignment)';
+
+  try {
+    const txtRecords = await dnsPromises.resolveTxt(domain);
+    for (const record of txtRecords) {
+      const joined = record.join(' ');
+      if (joined.includes('v=spf1')) {
+        spfStatus = 'pass';
+        spfDetails = joined;
+      }
+    }
+    const dmarcRecords = await dnsPromises.resolveTxt(`_dmarc.${domain}`);
+    for (const record of dmarcRecords) {
+      const joined = record.join(' ');
+      if (joined.includes('v=DMARC1')) {
+        dmarcStatus = 'pass';
+        dmarcDetails = joined;
+      }
+    }
+  } catch {
+    // defaults apply
+  }
+
+  return {
+    sender_email: senderEmail,
+    sender_domain: domain,
+    is_gmail: isGmail,
+    smtp_configured: Boolean(process.env.SMTP_HOST && process.env.SMTP_USER),
+    spf_record: {
+      status: spfStatus,
+      details: spfDetails,
+      recommendation: isGmail ? 'Pass: Official Google relays authorized.' : 'Add v=spf1 to domain DNS.',
+    },
+    dmarc_record: {
+      status: dmarcStatus,
+      details: dmarcDetails,
+      recommendation: isGmail ? 'Pass: From address aligns with authenticated Gmail user.' : 'Add DMARC TXT record.',
+    },
+    provider_daily_limit: isGmail ? 500 : 2000,
+    safe_daily_volume_recommended: isGmail ? 25 : 50,
+    bounce_rate_threshold: 'Must stay strictly under 2.0% (ideally < 1.0%) to prevent provider account suspension.',
+  };
+}

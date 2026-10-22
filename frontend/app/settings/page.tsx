@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { fetchSettings, updateSettings } from '@/lib/api';
 import DatabaseSettingCard from '@/components/DatabaseSettingCard';
+import DeliverabilityCard from '@/components/DeliverabilityCard';
 import { 
   Settings, 
   ShieldCheck, 
@@ -85,6 +86,9 @@ export default function SettingsPage() {
           {statusMsg.message}
         </div>
       )}
+
+      {/* Deliverability & Sender Reputation Guard */}
+      <DeliverabilityCard />
 
       {/* Database Engine & Central Store Settings */}
       <DatabaseSettingCard />

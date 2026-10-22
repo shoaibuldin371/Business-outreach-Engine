@@ -1,5 +1,6 @@
 import {
   insertLead,
+  updateLead,
   insertLog,
   saveLeadResearch,
   saveOutreachDraft,
@@ -17,7 +18,7 @@ import {
 import { verifyBusinessWebsite } from './verification';
 import { conductBusinessResearch } from './research';
 import { generatePersonalizedPitch } from './ai';
-import { sendHitlApprovalEmail, verifyDomainHasMx } from './email';
+import { sendHitlApprovalEmail, sendPitchToProspect, verifyDomainHasMx } from './email';
 import { BusinessLead } from './types';
 
 export interface CycleResult {
@@ -169,15 +170,26 @@ export async function runDiscoveryCycle(
           const candidateEmail = research.public_email.trim().toLowerCase();
           const adminEmail = (settings.admin_notification_email || settings.sender_email || 'mshoaibawan371@gmail.com').toLowerCase();
 
-          if (candidateEmail !== adminEmail && !candidateEmail.includes('mshoaibawan371') && !candidateEmail.includes('shoaib')) {
+          if (candidateEmail !== adminEmail && !candidateEmail.includes('mshoaibawan371') && !candidateEmail.includes('mshoaibuldin371') && !candidateEmail.includes('shoaib')) {
             validContactEmail = candidateEmail;
           }
         }
 
         const hasContactEmail = Boolean(validContactEmail);
-        const leadStatus = hasContactEmail ? 'pending_approval' : 'missing_contact';
-        if (!hasContactEmail) missingEmailCount++;
+        if (!hasContactEmail) {
+          missingEmailCount++;
+          await insertLog(
+            'explore',
+            'info',
+            `Skipped '${name}': No verified email found (email-only outreach policy).`,
+            { business: name, city: candidate.city },
+            undefined,
+            run.id
+          );
+          continue;
+        }
 
+        const leadStatus = settings.require_manual_approval ? 'pending_approval' : 'sent';
         const token = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
 
         // Step D: Save Master Lead Record to Supabase
@@ -243,9 +255,25 @@ export async function runDiscoveryCycle(
           run.id
         );
 
-        // Step G: Send HITL review email to admin ONLY ONCE per newly qualified business
-        if (hasContactEmail && settings.require_manual_approval) {
-          await sendHitlApprovalEmail(savedLead, token);
+        // Step G: Automatic Outreach Dispatch (Direct to prospect) or HITL review
+        if (hasContactEmail) {
+          if (settings.require_manual_approval) {
+            await sendHitlApprovalEmail(savedLead, token);
+          } else {
+            // Full Autonomous Mode: Dispatch directly to prospect's verified email
+            const sendResult = await sendPitchToProspect(savedLead, 'automated_discovery');
+            if (sendResult.success) {
+              await updateLead(savedLead.id, { status: 'sent' });
+              await insertLog(
+                'success',
+                'success',
+                `🚀 Auto-dispatched personalized outreach pitch to '${name}' (${savedLead.email}). Visible in your Gmail 'Sent' folder!`,
+                { lead_id: savedLead.id, business: name, email: savedLead.email, provider: sendResult.provider },
+                savedLead.id,
+                run.id
+              );
+            }
+          }
         }
       } catch (leadError: any) {
         errorCount++;

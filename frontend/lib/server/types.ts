@@ -1,17 +1,35 @@
 export type LeadStatus =
+  | 'draft'
+  | 'pending_approval'
+  | 'approved'
+  | 'sending'
+  | 'accepted_by_provider'
+  | 'delivered'
+  | 'bounced'
+  | 'failed'
+  | 'reply_received'
+  | 'rejected'
+  | 'missing_contact'
   | 'discovered'
   | 'researching'
   | 'qualified'
   | 'draft_ready'
-  | 'pending_approval'
-  | 'approved'
   | 'sent'
   | 'completed'
-  | 'rejected'
-  | 'missing_contact'
   | 'skipped'
-  | 'failed'
   | 'error';
+
+export type EmailDeliveryStatus =
+  | 'draft'
+  | 'pending_approval'
+  | 'approved'
+  | 'sending'
+  | 'accepted_by_provider'
+  | 'delivered'
+  | 'bounced'
+  | 'failed'
+  | 'reply_received'
+  | 'rejected';
 
 export type WebsiteStatus =
   | 'none_found'
@@ -94,12 +112,20 @@ export interface EmailSendLog {
   sender_email: string;
   subject: string;
   body: string;
-  provider: 'gmail_oauth' | 'smtp' | 'simulation';
+  provider: 'gmail_oauth' | 'smtp' | 'simulation' | 'none';
   provider_message_id?: string;
-  status: 'sent' | 'delivered' | 'failed' | 'bounced';
+  status: EmailDeliveryStatus | 'sent';
+  error_code?: string;
   error_message?: string;
+  sanitized_error_details?: Record<string, any>;
+  attempts?: number;
+  pitch_angle?: string;
   idempotency_key?: string;
   sent_at: string;
+  delivered_at?: string;
+  reply_status?: 'positive' | 'pricing_or_portfolio' | 'meeting_requested' | 'unsubscribed' | 'negative' | 'none';
+  reply_received_at?: string;
+  reply_notes?: string;
 }
 
 export interface AutomationRun {
@@ -177,6 +203,13 @@ export interface DashboardStats {
   pending_approval: number;
   approved_count: number;
   sent_count: number;
+  accepted_by_provider_count: number;
+  confirmed_delivered_count: number;
+  bounced_count: number;
+  failed_count: number;
+  replies_count: number;
+  positive_replies_count: number;
+  reply_rate_percentage: number;
   rejected_count: number;
   missing_contact_count: number;
   active_pipelines_count: number;

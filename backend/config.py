@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str = os.getenv("SECRET_KEY", "business-outreach-engine-secret-key-3hours")
 
     model_config = {
-        "env_file": ".env",
+        "env_file": [os.path.join(os.path.dirname(__file__), ".env"), ".env"],
         "extra": "allow"
     }
 

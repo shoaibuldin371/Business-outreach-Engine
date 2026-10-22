@@ -58,13 +58,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       body: emailBody,
       provider: res.provider,
       provider_message_id: res.providerMessageId,
-      status: res.success ? 'sent' : 'failed',
+      status: res.success ? 'accepted_by_provider' : (res.status === 'bounced' ? 'bounced' : 'failed'),
+      error_code: res.errorCategory,
       error_message: res.success ? undefined : res.message,
     });
 
     if (res.success) {
       await updateLead(lead.id, {
-        status: 'sent',
+        status: 'accepted_by_provider',
         email: recipient,
         email_subject: subject,
         email_body: emailBody,
@@ -74,27 +75,28 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       await insertLog(
         'success',
         'success',
-        `Custom email successfully delivered to ${lead.business_name} (${recipient}) via ${res.provider}.`,
-        { recipient, provider: res.provider },
+        `Custom email accepted by mail provider for ${lead.business_name} (${recipient}) via ${res.provider}. Provider Message ID: ${res.providerMessageId || 'N/A'}.`,
+        { recipient, provider: res.provider, provider_message_id: res.providerMessageId },
         lead.id
       );
 
       return NextResponse.json({
-        status: 'success',
-        message: `Email sent to ${recipient}`,
+        status: 'accepted_by_provider',
+        message: `Accepted by ${res.provider} provider for delivery.`,
         provider: res.provider,
+        provider_message_id: res.providerMessageId,
       });
     } else {
-      await updateLead(lead.id, { status: 'failed' });
+      await updateLead(lead.id, { status: res.status === 'bounced' ? 'bounced' : 'failed' });
       await insertLog(
         'error',
         'error',
         `Failed delivering custom email to ${lead.business_name}: ${res.message}`,
-        { recipient, error: res.message },
+        { recipient, error: res.message, errorCategory: res.errorCategory },
         lead.id
       );
 
-      return NextResponse.json({ error: `Failed to deliver: ${res.message}` }, { status: 500 });
+      return NextResponse.json({ error: `Delivery failed: ${res.message}`, category: res.errorCategory }, { status: 500 });
     }
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
