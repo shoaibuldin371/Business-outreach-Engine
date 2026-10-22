@@ -259,8 +259,14 @@ function CustomEmailContent() {
                   <span>{currentLead.phone || 'N/A'}</span>
                 </div>
                 <div className="flex justify-between border-b border-white/5 pb-1.5">
-                  <span className="text-slate-400">Website Signal:</span>
-                  <span className="text-rose-400 font-semibold">{currentLead.website_status}</span>
+                  <span className="text-slate-400">Website Status:</span>
+                  <span className="font-semibold text-amber-300">
+                    {currentLead.website_status === 'none_found' || !currentLead.website
+                      ? 'No Website Found'
+                      : currentLead.website_status === 'unreachable'
+                      ? 'Broken / Offline Site'
+                      : currentLead.website_status || 'Needs Redesign'}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">Current Status:</span>

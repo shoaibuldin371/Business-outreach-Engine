@@ -58,6 +58,36 @@ const QUICK_WORLDWIDE_PRESETS = [
   { label: '🇺🇸 Los Angeles, US', city: 'Los Angeles, CA', category: 'boutique corporate & ip law firms' },
 ];
 
+function renderWebsiteBadge(lead: Lead) {
+  const status = (lead.website_status || '').toLowerCase().trim();
+  const hasWebsite = Boolean(lead.website && lead.website.trim() && !lead.website.includes('example.com'));
+
+  if (!hasWebsite || status === 'none_found' || status.includes('no website') || status.includes('none')) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] md:text-[11px] font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/25 truncate">
+        <Globe2 className="w-3 h-3 shrink-0 text-amber-400" />
+        <span className="truncate">No Website Found</span>
+      </span>
+    );
+  }
+
+  if (status === 'unreachable' || status.includes('unreachable') || status.includes('broken') || status.includes('offline') || status.includes('error')) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] md:text-[11px] font-semibold bg-rose-500/10 text-rose-300 border border-rose-500/25 truncate">
+        <AlertTriangle className="w-3 h-3 shrink-0 text-rose-400" />
+        <span className="truncate">Broken / Offline Site</span>
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] md:text-[11px] font-semibold bg-cyan-500/10 text-cyan-300 border border-cyan-500/25 truncate">
+      <Globe2 className="w-3 h-3 shrink-0 text-cyan-400" />
+      <span className="truncate">Needs Redesign</span>
+    </span>
+  );
+}
+
 export default function DashboardPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -485,16 +515,9 @@ export default function DashboardPage() {
                       </div>
                     </div>
 
-                    {/* Website Signal */}
+                    {/* Website Status */}
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold ${
-                        !lead.website || lead.website_status?.includes('No website') || lead.website_status?.includes('Unreachable')
-                          ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                          : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                      }`}>
-                        <AlertTriangle className="w-3 h-3" />
-                        {lead.website_status || 'No Website'}
-                      </span>
+                      {renderWebsiteBadge(lead)}
 
                       {isPending && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
@@ -570,7 +593,7 @@ export default function DashboardPage() {
                 <thead>
                   <tr className="border-b border-white/5 text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-900/60">
                     <th className="py-3 px-4">Business</th>
-                    <th className="py-3 px-4">Website Signal</th>
+                    <th className="py-3 px-4">Website Status</th>
                     <th className="py-3 px-4">Contact</th>
                     <th className="py-3 px-4">Outreach Status</th>
                     <th className="py-3 px-4">Score</th>
@@ -600,16 +623,9 @@ export default function DashboardPage() {
                           </div>
                         </td>
 
-                        {/* Website Signal */}
+                        {/* Website Status */}
                         <td className="py-3.5 px-4 truncate">
-                          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold truncate ${
-                            !lead.website || lead.website_status?.includes('No website') || lead.website_status?.includes('Unreachable')
-                              ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                              : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                          }`}>
-                            <AlertTriangle className="w-3 h-3 shrink-0" />
-                            <span className="truncate">{lead.website_status || 'No Website'}</span>
-                          </span>
+                          {renderWebsiteBadge(lead)}
                         </td>
 
                         {/* Contact */}
