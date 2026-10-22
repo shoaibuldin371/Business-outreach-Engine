@@ -112,8 +112,28 @@ export const WORLDWIDE_CATEGORIES = [
 ];
 
 export function getRandomWorldwideHub(): WorldwideHub {
-  const index = Math.floor(Math.random() * WORLDWIDE_HUBS.length);
-  return WORLDWIDE_HUBS[index];
+  // Balanced worldwide rotation (80% non-US international distribution):
+  // 1. UK & Europe, 2. Oceania (Australia/NZ), 3. Canada, 4. Middle East & Asia, 5. USA
+  const territories = ['UK & Europe', 'Oceania', 'Canada', 'Middle East & Asia', 'USA'];
+  const chosen = territories[Math.floor(Math.random() * territories.length)];
+
+  let matching: WorldwideHub[] = [];
+  if (chosen === 'UK & Europe') {
+    matching = WORLDWIDE_HUBS.filter((h) => h.region === 'Europe');
+  } else if (chosen === 'Oceania') {
+    matching = WORLDWIDE_HUBS.filter((h) => h.region === 'Oceania');
+  } else if (chosen === 'Canada') {
+    matching = WORLDWIDE_HUBS.filter((h) => h.country === 'Canada');
+  } else if (chosen === 'Middle East & Asia') {
+    matching = WORLDWIDE_HUBS.filter((h) => h.region === 'Middle East' || h.region === 'Asia');
+  } else {
+    matching = WORLDWIDE_HUBS.filter((h) => h.country === 'United States');
+  }
+
+  if (matching.length > 0) {
+    return matching[Math.floor(Math.random() * matching.length)];
+  }
+  return WORLDWIDE_HUBS[Math.floor(Math.random() * WORLDWIDE_HUBS.length)];
 }
 
 export function getRandomWorldwideCategory(): string {

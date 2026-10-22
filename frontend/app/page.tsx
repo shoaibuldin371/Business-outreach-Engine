@@ -198,6 +198,35 @@ export default function DashboardPage() {
                 ))}
               </div>
             </div>
+
+            {/* 1-Click Worldwide Hub Targeting */}
+            <div className="pt-2">
+              <div className="text-[11px] font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                <Globe2 className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Instant Worldwide Hub Outreach (Click any flag to target immediately):</span>
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {[
+                  { label: '🌍 Auto Worldwide', city: '', cat: '' },
+                  { label: '🇬🇧 London, UK', city: 'London, United Kingdom', cat: 'cosmetic dentistry & orthodontics' },
+                  { label: '🇦🇺 Sydney, AU', city: 'Sydney, Australia', cat: 'commercial hvac & refrigeration contractors' },
+                  { label: '🇨🇦 Toronto, CA', city: 'Toronto, ON', cat: 'luxury custom home builders' },
+                  { label: '🇦🇪 Dubai, UAE', city: 'Dubai, UAE', cat: 'aesthetic clinics & med spas' },
+                  { label: '🇮🇪 Dublin, IE', city: 'Dublin, Ireland', cat: 'boutique corporate & ip law firms' },
+                  { label: '🇳🇱 Amsterdam, NL', city: 'Amsterdam, Netherlands', cat: 'solar energy & clean power installers' },
+                  { label: '🇺🇸 New York, US', city: 'New York, NY', cat: 'commercial roofing & restoration' },
+                ].map((hub, idx) => (
+                  <button
+                    key={idx}
+                    disabled={discovering}
+                    onClick={() => handleTriggerDiscovery(hub.city, hub.cat)}
+                    className="text-[11px] px-2.5 py-1 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/25 hover:border-indigo-500/50 transition-all font-medium disabled:opacity-50"
+                  >
+                    {hub.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           {/* Right: Autopilot Action Box (1-Click Run, No Typing Needed) */}

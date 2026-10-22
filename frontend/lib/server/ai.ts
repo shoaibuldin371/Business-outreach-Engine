@@ -172,42 +172,21 @@ export function generateHeuristicPitch(ctx: PitchContext): EmailPitch {
   let body = '';
 
   if (angle === 'mobile_speed') {
-    subject = `Mobile client inquiries for ${name} in ${city}`;
+    subject = `${name} — quick question`;
     alternativeSubjects = [
-      `Quick question regarding ${name}'s customer inquiry process`,
-      `Allowing ${city} clients to request estimates online from ${name}`,
+      `Capturing evening customer inquiries for ${name}`,
+      `Estimate request page for ${name} (${city})`,
+      `Quick question regarding ${name} (${city})`,
     ];
-    body = `Hi ${name} Team,
+    body = `Hi ${name} team,
 
-I noticed ${name} while reviewing active ${category} services in ${city}. Specifically, ${cleanObs} caught my attention.
+I was reviewing local ${category} services in ${city} and noticed ${name} on Google Maps.
 
-Over 70% of clients looking for ${category} services in ${city} search on their smartphones in the evening when calling isn't convenient. Without a fast, mobile-friendly landing page, those direct inquiries default to competitors with instant quote forms.
+Most local clients look for ${category} specialists on their smartphones during evenings and weekends when calling isn't practical. Without a fast mobile page where they can submit project details in 30 seconds, those direct inquiries often default to competitors.
 
-I build clean, mobile-first websites tailored for ${category} businesses that allow local customers to request estimates or book services directly in 30 seconds.
+I build clean, mobile-first websites tailored for ${category} businesses that turn search visitors into booked jobs with zero technical hassle on your part.
 
-Would you be open to a 5-minute call sometime this week? I have already prepared a quick preview concept for ${name} that I'd be glad to share with no obligation.
-
-Best regards,
-
-${senderName}
-${senderBusiness}
-
-(If this isn't relevant to you right now, please reply with "No thanks" and I will ensure no further emails are sent.)`;
-  } else if (angle === 'free_mockup') {
-    subject = `Complimentary website concept prepared for ${name}`;
-    alternativeSubjects = [
-      `Rough mockup draft for ${name} (${city})`,
-      `Quick preview of a modern web presence for ${name}`,
-    ];
-    body = `Hi ${name} Team,
-
-I came across your work in ${city} while researching reputable ${category} providers. Specifically, ${cleanObs} stood out.
-
-While checking your digital footprint, I saw that ${name} does not have an active website to showcase your past projects and services to clients searching Google.
-
-To show you exactly what's possible, I put together a clean, 1-page design concept specifically for ${name}. It showcases your credentials, transparent service options, and an easy estimate request form.
-
-Can I send over the preview link for you to look over? No sales pitch or pressure—just a free resource for your team.
+Would it be alright if I sent over a quick 2-minute concept I prepared for ${name}? No commitment or sales pitch—just wanted to share what's working for similar providers.
 
 Best regards,
 
@@ -215,38 +194,60 @@ ${senderName}
 ${senderBusiness}
 
 (Reply "No thanks" if you'd prefer not to hear from me again.)`;
-  } else {
-    // Default: 'local_search'
-    angle = 'local_search';
-    subject = `Idea for ${name} — Capturing ${city} client inquiries online`;
+  } else if (angle === 'free_mockup') {
+    subject = `Website concept for ${name}`;
     alternativeSubjects = [
-      `Quick observation regarding ${name}'s online visibility in ${city}`,
-      `How ${name} can capture local ${category} inquiries in ${city}`,
+      `Quick preview draft for ${name}`,
+      `${name} — quick question (${city})`,
+      `Idea for ${name} in ${city}`,
     ];
-    body = `Dear ${name} Team,
+    body = `Hi ${name} team,
 
-I came across your business while researching reputable ${category} specialists in ${city}. Specifically, ${cleanObs} caught my attention.
+I came across your profile while looking up established ${category} providers in ${city}. You clearly have a strong local reputation, but I noticed there is currently no active website linked to your Google business listing.
 
-While reviewing your online footprint, I noticed that ${name} does not currently have an active, dedicated website where local clients searching online can view your full services, check pricing, or submit direct project requests.
+When local clients search for ${category} on their phones, over 80% choose whichever provider allows them to view services or submit an instant estimate request directly online.
 
-Most prospective clients in ${city} search on Google before making a booking decision. Without a dedicated website, those inquiries often end up going to competitors with direct booking forms.
+I actually put together a clean 1-page design preview specifically for ${name} to show how you can capture those search inquiries with an instant quote form.
 
-I specialize in creating clean, fast websites for ${category} businesses that turn search traffic into booked calls with zero technical hassle on your part.
-
-Would you be open to a quick 5-minute conversation sometime this week? I'd be glad to share a preliminary concept prepared for ${name}, completely free with no obligation.
+Can I send the preview link over? No catch or sales pressure at all—just thought it would be a useful asset for your team.
 
 Best regards,
 
 ${senderName}
 ${senderBusiness}
 
-(If this isn't relevant right now, simply reply "No thanks" and I will immediately mark your address as do-not-contact.)`;
+(If this isn't relevant right now, simply reply "No thanks" and I won't follow up.)`;
+  } else {
+    // Default: 'local_search'
+    angle = 'local_search';
+    subject = `Idea for ${name} (${city})`;
+    alternativeSubjects = [
+      `${name} — Google search observation`,
+      `Quick question regarding ${name}`,
+      `Capturing local inquiries for ${name} in ${city}`,
+    ];
+    body = `Hi ${name} team,
+
+I came across ${name} while researching top ${category} providers in ${city}.
+
+While reviewing your local presence, I noticed that ${name} does not currently have a dedicated website attached to your Google listing. When customers in ${city} search online, they typically expect to see services and an easy contact form before picking up the phone.
+
+I specialize in building sleek, high-converting websites for ${category} businesses that ensure local search traffic turns into booked inquiries for your team.
+
+I have already put together a preliminary concept for ${name}. Would you be open to taking a look at the preview link?
+
+Best regards,
+
+${senderName}
+${senderBusiness}
+
+(If this isn't relevant to your team, please reply "No thanks" and I will remove your email immediately.)`;
   }
 
   return {
     subject,
     body,
-    modelUsed: 'Deterministic Heuristic Pitch Engine (Verified Context)',
+    modelUsed: 'High-Converting B2B Pitch Engine (Permission & Value First)',
     pitchAngle: angle,
     alternativeSubjects,
   };

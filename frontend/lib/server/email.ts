@@ -341,6 +341,40 @@ Open Pipeline Dashboard: ${dashboardUrl}`;
   return sendRes;
 }
 
+export function formatOutreachHtml(body: string, senderName: string, senderBusiness?: string): string {
+  const cleanSenderName = senderName || 'Muhammad Shoaib';
+  const cleanSenderBusiness = senderBusiness || 'Digital Web Strategy & Client Acquisition';
+
+  const paragraphs = body
+    .split('\n\n')
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p) => {
+      if (p.startsWith('(') && p.endsWith(')')) {
+        return `<p style="margin: 20px 0 0 0; line-height: 1.5; color: #64748b; font-size: 12px; font-style: italic;">${p}</p>`;
+      }
+      return `<p style="margin: 0 0 14px 0; line-height: 1.65; color: #1e293b; font-size: 14.5px;">${p.replace(/\n/g, '<br/>')}</p>`;
+    })
+    .join('');
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #ffffff; color: #1e293b; margin: 0; padding: 24px 16px;">
+  <div style="max-width: 560px; margin: 0 auto; background: #ffffff;">
+    ${paragraphs}
+    <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 13px; color: #475569; line-height: 1.5;">
+      <strong style="color: #0f172a; font-size: 14px;">${cleanSenderName}</strong><br/>
+      <span style="color: #64748b;">${cleanSenderBusiness}</span>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
 /**
  * Dispatches an approved outreach pitch to a prospect business
  * Enforces strict idempotency, pre-flight MX check, and duplicate-send prevention
@@ -394,8 +428,13 @@ export async function sendPitchToProspect(
     };
   }
 
-  const subject = lead.email_subject || `A tailored web presence idea for ${lead.business_name}`;
+  const subject = lead.email_subject || `Quick question regarding ${lead.business_name}`;
   const body = lead.email_body || '';
+
+  const settings = await getAutomationSettings();
+  const senderName = settings.sender_name || process.env.SENDER_NAME || 'Muhammad Shoaib';
+  const senderBusiness = settings.sender_business || process.env.SENDER_BUSINESS || 'Web Development & Client Acquisition';
+  const html = formatOutreachHtml(body, senderName, senderBusiness);
 
   await insertLog(
     'sending',
@@ -405,7 +444,7 @@ export async function sendPitchToProspect(
     lead.id
   );
 
-  const res = await sendEmail({ to: recipient, subject, text: body });
+  const res = await sendEmail({ to: recipient, subject, text: body, html });
 
   // Record send log
   await recordSentEmail({
