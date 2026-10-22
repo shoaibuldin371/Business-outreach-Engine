@@ -65,7 +65,7 @@ export async function runDiscoveryCycle(
   const hub = isDefaultCity ? getRandomWorldwideHub() : null;
   const city = customCity && customCity.trim() ? customCity.trim() : (hub ? `${hub.city}, ${hub.country}` : 'London, United Kingdom');
   const category = customCategory && customCategory.trim() ? customCategory.trim() : getRandomWorldwideCategory();
-  const count = customCount || settings.batch_size || 5;
+  const count = customCount || settings.batch_size || 8;
 
   const run = await createAutomationRun(triggerType, category, city, count);
   const startTime = Date.now();

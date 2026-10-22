@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const category = searchParams.get('category') || undefined;
   const city = searchParams.get('city') || undefined;
-  const count = parseInt(searchParams.get('count') || '5');
+  const count = parseInt(searchParams.get('count') || '8');
 
   const result = await runDiscoveryCycle(category, city, count, 'scheduled_3h');
   return NextResponse.json(result);
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}));
     const category = body.category && body.category.trim() ? body.category.trim() : undefined;
     const city = body.city && body.city.trim() ? body.city.trim() : undefined;
-    const count = body.count ? parseInt(body.count) : 5;
+    const count = body.count ? parseInt(body.count) : 8;
 
     const result = await runDiscoveryCycle(category, city, count, 'manual');
     return NextResponse.json(result);

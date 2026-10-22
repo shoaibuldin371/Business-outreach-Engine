@@ -48,16 +48,6 @@ const HIGH_GROWTH_SHOWCASE = [
   { label: 'Veterinary Hospitals', icon: '🐾' },
 ];
 
-const QUICK_WORLDWIDE_PRESETS = [
-  { label: '🌍 Worldwide Auto-Rotate', city: '', category: '' },
-  { label: '🇬🇧 London, UK', city: 'London, United Kingdom', category: 'cosmetic dentistry & orthodontics' },
-  { label: '🇺🇸 New York, US', city: 'New York, NY', category: 'commercial roofing & restoration' },
-  { label: '🇨🇦 Toronto, CA', city: 'Toronto, ON', category: 'luxury custom home builders' },
-  { label: '🇦🇺 Sydney, AU', city: 'Sydney, Australia', category: 'commercial hvac & refrigeration contractors' },
-  { label: '🇦🇪 Dubai, UAE', city: 'Dubai, UAE', category: 'aesthetic clinics & med spas' },
-  { label: '🇺🇸 Los Angeles, US', city: 'Los Angeles, CA', category: 'boutique corporate & ip law firms' },
-];
-
 function renderWebsiteBadge(lead: Lead) {
   const status = (lead.website_status || '').toLowerCase().trim();
   const hasWebsite = Boolean(lead.website && lead.website.trim() && !lead.website.includes('example.com'));
@@ -98,11 +88,6 @@ export default function DashboardPage() {
   const [discovering, setDiscovering] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  // Optional manual override (collapsed by default for 100% autonomous operation)
-  const [showManualOverride, setShowManualOverride] = useState(false);
-  const [category, setCategory] = useState('');
-  const [city, setCity] = useState('');
-
   const loadData = async () => {
     try {
       const [leadsData, statsData] = await Promise.all([
@@ -124,17 +109,14 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, [activeFilter]);
 
-  const handleTriggerDiscovery = async (overrideCity?: string, overrideCategory?: string) => {
+  const handleTriggerDiscovery = async () => {
     setDiscovering(true);
     setNotification(null);
     try {
-      const targetCity = overrideCity !== undefined ? overrideCity : city;
-      const targetCategory = overrideCategory !== undefined ? overrideCategory : category;
-
-      const res = await triggerDiscovery(targetCategory || undefined, targetCity || undefined, 5);
+      const res = await triggerDiscovery(undefined, undefined, 8);
       setNotification({
         type: 'success',
-        message: `✓ Autopilot Cycle Finished! Discovered & audited high-growth businesses in worldwide hub (${res.leads_qualified || 0} qualified, no-website leads pushed to Supabase).`
+        message: `✓ Autonomous Cycle Executed! Audited prospective businesses in worldwide hub (${res.leads_qualified || 0} qualified, no-website leads pushed to Supabase).`
       });
       await loadData();
     } catch (err: any) {
@@ -199,32 +181,31 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* 1-Click Worldwide Hub Targeting */}
-            <div className="pt-2">
-              <div className="text-[11px] font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
-                <Globe2 className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Instant Worldwide Hub Outreach (Click any flag to target immediately):</span>
+            {/* Autonomous System Pillars */}
+            <div className="pt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
+                <div className="text-[10px] text-slate-400 font-medium">Global Territory</div>
+                <div className="text-xs font-bold text-white flex items-center gap-1 mt-0.5">
+                  <Globe2 className="w-3 h-3 text-cyan-400" /> Auto Worldwide
+                </div>
               </div>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {[
-                  { label: '🌍 Auto Worldwide', city: '', cat: '' },
-                  { label: '🇬🇧 London, UK', city: 'London, United Kingdom', cat: 'cosmetic dentistry & orthodontics' },
-                  { label: '🇦🇺 Sydney, AU', city: 'Sydney, Australia', cat: 'commercial hvac & refrigeration contractors' },
-                  { label: '🇨🇦 Toronto, CA', city: 'Toronto, ON', cat: 'luxury custom home builders' },
-                  { label: '🇦🇪 Dubai, UAE', city: 'Dubai, UAE', cat: 'aesthetic clinics & med spas' },
-                  { label: '🇮🇪 Dublin, IE', city: 'Dublin, Ireland', cat: 'boutique corporate & ip law firms' },
-                  { label: '🇳🇱 Amsterdam, NL', city: 'Amsterdam, Netherlands', cat: 'solar energy & clean power installers' },
-                  { label: '🇺🇸 New York, US', city: 'New York, NY', cat: 'commercial roofing & restoration' },
-                ].map((hub, idx) => (
-                  <button
-                    key={idx}
-                    disabled={discovering}
-                    onClick={() => handleTriggerDiscovery(hub.city, hub.cat)}
-                    className="text-[11px] px-2.5 py-1 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/25 hover:border-indigo-500/50 transition-all font-medium disabled:opacity-50"
-                  >
-                    {hub.label}
-                  </button>
-                ))}
+              <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
+                <div className="text-[10px] text-slate-400 font-medium">Cron Schedule</div>
+                <div className="text-xs font-bold text-emerald-400 flex items-center gap-1 mt-0.5">
+                  <Clock className="w-3 h-3 text-emerald-400" /> Every 3 Hours
+                </div>
+              </div>
+              <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
+                <div className="text-[10px] text-slate-400 font-medium">Pitch Style</div>
+                <div className="text-xs font-bold text-amber-300 flex items-center gap-1 mt-0.5">
+                  <Sparkles className="w-3 h-3 text-amber-400" /> 100% Humanized
+                </div>
+              </div>
+              <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
+                <div className="text-[10px] text-slate-400 font-medium">Dispatch Gateway</div>
+                <div className="text-xs font-bold text-indigo-300 flex items-center gap-1 mt-0.5">
+                  <Send className="w-3 h-3 text-indigo-400" /> Gmail SMTP (Live)
+                </div>
               </div>
             </div>
           </div>
@@ -234,119 +215,32 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-white flex items-center gap-1.5">
                 <Sparkles className="w-4 h-4 text-indigo-400" />
-                Autonomous Scheduler
+                Autonomous Engine
               </span>
               <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                ● 24/7 Online
+                ● 24/7 Autopilot
               </span>
             </div>
 
             <p className="text-[11px] text-slate-400 leading-normal">
-              Cloud automation automatically runs every 3 hours. Click below to trigger the next auto-rotation cycle immediately without writing anything.
+              Engine autonomously discovers verified businesses worldwide every 3 hours and auto-delivers humanized pitches directly via your Gmail.
             </p>
 
             {/* Big Instant 1-Click Run Button */}
             <button
-              onClick={() => handleTriggerDiscovery('', '')}
+              onClick={() => handleTriggerDiscovery()}
               disabled={discovering}
               className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 shadow-xl shadow-indigo-500/30 transition-all disabled:opacity-50 active:scale-[0.99]"
             >
               <Sparkles className={`w-4 h-4 ${discovering ? 'animate-spin' : ''}`} />
-              <span>{discovering ? 'Auditing Next Global Hub...' : '⚡ Run Instant Autopilot Cycle'}</span>
+              <span>{discovering ? 'Auditing Global Hub & Pitching...' : '⚡ Trigger Worldwide Cycle Now'}</span>
             </button>
 
             <div className="text-[10px] text-center text-slate-400">
-              Auto-selects next high-growth niche & worldwide city
-            </div>
-
-            {/* Optional Collapsible Manual Override Toggle */}
-            <div className="pt-2 border-t border-white/5">
-              <button
-                type="button"
-                onClick={() => setShowManualOverride(!showManualOverride)}
-                className="w-full flex items-center justify-between text-[11px] font-medium text-slate-400 hover:text-slate-200 transition-colors py-1"
-              >
-                <span className="flex items-center gap-1">
-                  <SlidersHorizontal className="w-3 h-3 text-indigo-400" />
-                  <span>Custom Target Override (Optional)</span>
-                </span>
-                {showManualOverride ? (
-                  <ChevronUp className="w-3.5 h-3.5" />
-                ) : (
-                  <ChevronDown className="w-3.5 h-3.5" />
-                )}
-              </button>
+              Autonomously picks next high-wealth city, category & verified leads
             </div>
           </div>
         </div>
-
-        {/* Collapsible Manual Override Drawer (Hidden by default so user doesn't have to write anything) */}
-        {showManualOverride && (
-          <div className="pt-4 border-t border-white/10 space-y-3 bg-black/20 p-4 rounded-2xl">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
-                <Compass className="w-3.5 h-3.5 text-indigo-400" />
-                Custom City or Category Override (For Specific Testing Only)
-              </span>
-              <button
-                onClick={() => {
-                  setCity('');
-                  setCategory('');
-                }}
-                className="text-[11px] text-indigo-400 hover:underline"
-              >
-                Reset to Worldwide Auto
-              </button>
-            </div>
-
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-              <input
-                type="text"
-                placeholder="Specific Niche (e.g. Med Spas, Commercial HVAC)"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="px-3 py-2 text-xs bg-slate-950 border border-white/10 rounded-xl text-slate-200 focus:outline-none focus:border-indigo-500 w-full sm:w-64"
-              />
-              <input
-                type="text"
-                placeholder="Specific City (e.g. Dubai, London, New York)"
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                className="px-3 py-2 text-xs bg-slate-950 border border-white/10 rounded-xl text-slate-200 focus:outline-none focus:border-indigo-500 w-full sm:w-64"
-              />
-              <button
-                onClick={() => handleTriggerDiscovery()}
-                disabled={discovering}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 transition-colors disabled:opacity-50 shrink-0"
-              >
-                Scan Specific Target
-              </button>
-            </div>
-
-            {/* Quick Presets inside Drawer */}
-            <div className="flex items-center gap-1.5 flex-wrap pt-1">
-              <span className="text-[10px] text-slate-400 mr-1 flex items-center gap-1">
-                <Globe2 className="w-3 h-3 text-indigo-400" /> Quick Hubs:
-              </span>
-              {QUICK_WORLDWIDE_PRESETS.map((preset, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => {
-                    setCity(preset.city);
-                    setCategory(preset.category);
-                  }}
-                  className={`text-[11px] px-2.5 py-1 rounded-lg border transition-all ${
-                    city === preset.city && category === preset.category
-                      ? 'bg-indigo-600/30 text-indigo-300 border-indigo-500/50 shadow-sm'
-                      : 'bg-white/5 hover:bg-white/10 text-slate-300 border-white/5'
-                  }`}
-                >
-                  {preset.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       {notification && (

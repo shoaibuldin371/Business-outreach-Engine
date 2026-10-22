@@ -174,31 +174,32 @@ export function generateHeuristicPitch(ctx: PitchContext): EmailPitch {
   if (angle === 'mobile_speed') {
     subject = `${name} — quick question`;
     alternativeSubjects = [
-      `Capturing evening customer inquiries for ${name}`,
-      `Estimate request page for ${name} (${city})`,
-      `Quick question regarding ${name} (${city})`,
+      `Quick question regarding ${name}`,
+      `Idea for ${name} (${city})`,
+      `${name} customer inquiries`,
     ];
-    body = `Hi ${name} team,
+    body = `Hi guys,
 
-I was reviewing local ${category} services in ${city} and noticed ${name} on Google Maps.
+I was looking up ${category} services in ${city} earlier today and saw ${name} on Google Maps.
 
-Most local clients look for ${category} specialists on their smartphones during evenings and weekends when calling isn't practical. Without a fast mobile page where they can submit project details in 30 seconds, those direct inquiries often default to competitors.
+You have really solid customer feedback, but I noticed there isn't a mobile website or estimate link connected to your listing. Most clients searching on their phones in the evening prefer booking or requesting a quote online rather than calling, so competitors with online forms end up getting those calls.
 
-I build clean, mobile-first websites tailored for ${category} businesses that turn search visitors into booked jobs with zero technical hassle on your part.
+I put together a clean 1-page preview concept for ${name} to show how an online estimate page would look on mobile.
 
-Would it be alright if I sent over a quick 2-minute concept I prepared for ${name}? No commitment or sales pitch—just wanted to share what's working for similar providers.
+Can I shoot the preview link over? No catch or sales pressure at all, just thought it might be useful for your team.
 
-Best regards,
+Best,
 
 ${senderName}
-${senderBusiness}
+Web Designer & Developer
+${ctx.senderEmail || 'Mshoaibawan371@gmail.com'}
 
-(Reply "No thanks" if you'd prefer not to hear from me again.)`;
+(If you're not interested, just reply "No thanks" and no worries at all!)`;
   } else if (angle === 'free_mockup') {
     subject = `Website concept for ${name}`;
     alternativeSubjects = [
       `Quick preview draft for ${name}`,
-      `${name} — quick question (${city})`,
+      `${name} — quick question`,
       `Idea for ${name} in ${city}`,
     ];
     body = `Hi ${name} team,
@@ -211,10 +212,11 @@ I actually put together a clean 1-page design preview specifically for ${name} t
 
 Can I send the preview link over? No catch or sales pressure at all—just thought it would be a useful asset for your team.
 
-Best regards,
+Best,
 
 ${senderName}
-${senderBusiness}
+Web Designer & Developer
+${ctx.senderEmail || 'Mshoaibawan371@gmail.com'}
 
 (If this isn't relevant right now, simply reply "No thanks" and I won't follow up.)`;
   } else {
@@ -224,24 +226,25 @@ ${senderBusiness}
     alternativeSubjects = [
       `${name} — Google search observation`,
       `Quick question regarding ${name}`,
-      `Capturing local inquiries for ${name} in ${city}`,
+      `Capturing local inquiries for ${name}`,
     ];
-    body = `Hi ${name} team,
+    body = `Hi there,
 
-I came across ${name} while researching top ${category} providers in ${city}.
+I came across ${name} while looking at local ${category} providers in ${city}.
 
-While reviewing your local presence, I noticed that ${name} does not currently have a dedicated website attached to your Google listing. When customers in ${city} search online, they typically expect to see services and an easy contact form before picking up the phone.
+While checking your Google listing, I noticed you don't currently have a dedicated website attached. When customers in ${city} search online, they usually look for photos of past work and an easy contact form before picking up the phone.
 
-I specialize in building sleek, high-converting websites for ${category} businesses that ensure local search traffic turns into booked inquiries for your team.
+I build clean, fast websites for ${category} businesses that help turn local search traffic into booked inquiries.
 
-I have already put together a preliminary concept for ${name}. Would you be open to taking a look at the preview link?
+I already put together a quick preview draft for ${name}. Would it be alright if I sent the preview link over to look at?
 
-Best regards,
+Best,
 
 ${senderName}
-${senderBusiness}
+Web Designer & Developer
+${ctx.senderEmail || 'Mshoaibawan371@gmail.com'}
 
-(If this isn't relevant to your team, please reply "No thanks" and I will remove your email immediately.)`;
+(If you're all set or not interested, just reply "No thanks" and no worries at all!)`;
   }
 
   return {
