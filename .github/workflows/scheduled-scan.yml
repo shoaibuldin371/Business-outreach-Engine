@@ -15,4 +15,4 @@ jobs:
           echo "Triggering 3-hour autonomous worldwide discovery scan on live Vercel production deployment..."
           curl -s -X POST https://business-outreach-engine.vercel.app/api/agent/trigger \
             -H "Content-Type: application/json" \
-            -d '{"count": 5}' | jq .
+            -d '{"count": 8}' | jq .
