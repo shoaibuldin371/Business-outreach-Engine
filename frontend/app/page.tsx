@@ -452,8 +452,8 @@ export default function DashboardPage() {
               {filteredLeads.map((lead) => {
                 const isRejected = lead.status === 'rejected';
                 const isPending = lead.status === 'pending_approval' || lead.status === 'draft_ready';
-                const isSent = lead.status === 'sent' || lead.status === 'approved';
-                const isMissingContact = lead.status === 'missing_contact' || (!lead.email && !isSent && !isRejected);
+                const isSent = lead.status === 'sent' || lead.status === 'approved' || lead.status === 'accepted_by_provider' || lead.status === 'delivered';
+                const isFailed = lead.status === 'error' || lead.status === 'failed' || lead.status === 'bounced';
 
                 return (
                   <div
@@ -506,6 +506,11 @@ export default function DashboardPage() {
                           <XCircle className="w-3 h-3" /> Rejected
                         </span>
                       )}
+                      {isFailed && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                          <AlertTriangle className="w-3 h-3" /> Blocked (Invalid MX)
+                        </span>
+                      )}
                       {isSent && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                           <CheckCircle2 className="w-3 h-3" /> Auto-Emailed via Gmail
@@ -542,7 +547,7 @@ export default function DashboardPage() {
                           onClick={() => setSelectedLead(lead)}
                           className="w-full py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10"
                         >
-                          {isSent ? 'View Sent Pitch' : 'Review Pitch'}
+                          {isSent ? 'View Sent Pitch' : isFailed ? 'View Delivery Error' : 'Review Pitch'}
                         </button>
                       )}
                     </div>
@@ -576,8 +581,8 @@ export default function DashboardPage() {
                   {filteredLeads.map((lead) => {
                     const isRejected = lead.status === 'rejected';
                     const isPending = lead.status === 'pending_approval' || lead.status === 'draft_ready';
-                    const isSent = lead.status === 'sent' || lead.status === 'approved';
-                    const isMissingContact = lead.status === 'missing_contact' || (!lead.email && !isSent && !isRejected);
+                    const isSent = lead.status === 'sent' || lead.status === 'approved' || lead.status === 'accepted_by_provider' || lead.status === 'delivered';
+                    const isFailed = lead.status === 'error' || lead.status === 'failed' || lead.status === 'bounced';
 
                     return (
                       <tr key={lead.id} className="hover:bg-white/[0.02] transition-colors group">
@@ -633,6 +638,11 @@ export default function DashboardPage() {
                               <XCircle className="w-3 h-3 shrink-0" /> Draft Rejected
                             </span>
                           )}
+                          {isFailed && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                              <AlertTriangle className="w-3 h-3 shrink-0" /> Blocked (Invalid MX)
+                            </span>
+                          )}
                           {isSent && (
                             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                               <CheckCircle2 className="w-3 h-3 shrink-0" /> Auto-Emailed via Gmail
@@ -663,7 +673,7 @@ export default function DashboardPage() {
                               onClick={() => setSelectedLead(lead)}
                               className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors text-slate-200 bg-white/5 hover:bg-white/10 border border-white/10"
                             >
-                              {isSent ? 'View Sent Pitch' : 'Review Pitch'}
+                              {isSent ? 'View Sent Pitch' : isFailed ? 'View Delivery Error' : 'Review Pitch'}
                             </button>
                           )}
                         </td>

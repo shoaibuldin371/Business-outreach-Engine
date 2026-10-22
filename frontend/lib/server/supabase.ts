@@ -208,8 +208,10 @@ export async function getLeads(status?: string, limit = 200): Promise<BusinessLe
   }
 
   if (status === 'active') {
-    // Return all active pipeline leads with verified email
-    return allLeads.slice(0, limit);
+    // Return all sent & healthy active leads with verified email
+    return allLeads
+      .filter((l) => l.status !== 'error' && l.status !== 'failed' && l.status !== 'bounced' && l.status !== 'rejected')
+      .slice(0, limit);
   }
 
   return allLeads.filter((l) => l.status === status).slice(0, limit);
