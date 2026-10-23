@@ -289,7 +289,7 @@ export async function runDiscoveryCycle(
     }
 
     const durationMs = Date.now() - startTime;
-    const summaryMsg = `Discovery cycle complete for ${city}. ${qualifiedCount} qualified businesses without website saved to Supabase (${missingEmailCount} awaiting contact discovery, ${qualifiedCount - missingEmailCount} dispatched for HITL approval).`;
+    const summaryMsg = `Discovery cycle complete for ${city}. ${qualifiedCount} qualified businesses without website saved to Supabase (${missingEmailCount} awaiting contact discovery, ${Math.max(0, qualifiedCount - missingEmailCount)} dispatched for outreach).`;
 
     await updateAutomationRun(run.id, {
       status: 'completed',
