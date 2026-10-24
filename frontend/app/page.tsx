@@ -18,6 +18,7 @@ import LeadModal from '@/components/LeadModal';
 import ProductionHealthSection from '@/components/ProductionHealthSection';
 import DatabaseSettingCard from '@/components/DatabaseSettingCard';
 import DeliverabilityCard from '@/components/DeliverabilityCard';
+import EmailDeliveryPipelineCard from '@/components/EmailDeliveryPipelineCard';
 import Link from 'next/link';
 import { 
   Building2, 
@@ -377,6 +378,15 @@ export default function DashboardPage() {
           <div className="text-[10px] text-slate-500">08:00 & 20:00 UTC (Laptop Off)</div>
         </div>
       </div>
+
+      {/* Real-time Email Outreach Lifecycle & Hard Bounce Diagnostics */}
+      <EmailDeliveryPipelineCard
+        stats={stats}
+        onSelectLeadById={(leadId) => {
+          const found = leads.find((l) => l.id === leadId);
+          if (found) setSelectedLead(found);
+        }}
+      />
 
       {/* Main Interactive View Tabs */}
       <div className="flex items-center gap-2 border-b border-white/5 pb-2 overflow-x-auto">

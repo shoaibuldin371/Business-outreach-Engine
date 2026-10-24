@@ -28,7 +28,8 @@ export async function GET() {
         total_accepted: totalAccepted,
         confirmed_delivered: stats.confirmed_delivered_count || 0,
         bounced_count: totalBounced,
-        temporary_failures_count: stats.failed_count || 0,
+        temporary_failures_count: stats.temporary_failures_count || 0,
+        auth_provider_errors_count: stats.auth_provider_errors_count || 0,
         calculated_bounce_rate_percentage: calculatedBounceRate,
         bounce_status: calculatedBounceRate > 2.0 ? 'critical_paused' : 'healthy',
         replies_count: stats.replies_count || 0,
@@ -36,6 +37,7 @@ export async function GET() {
         reply_rate_percentage: stats.reply_rate_percentage || 0,
         suppression_list_size: suppressionList.length,
         suppression_entries: suppressionList,
+        failed_email_details: stats.failed_email_details || [],
       },
       timestamp: new Date().toISOString(),
     });

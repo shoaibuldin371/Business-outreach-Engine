@@ -73,121 +73,9 @@ export function isBlockedOrBouncedEmail(email: string): boolean {
   return false;
 }
 
-export interface ClassifiedEmailError {
-  category:
-    | 'HARD_BOUNCE'
-    | 'TEMPORARY_FAILURE'
-    | 'AUTHENTICATION_FAILURE'
-    | 'RATE_LIMIT_EXCEEDED'
-    | 'MESSAGE_REJECTED'
-    | 'TIMEOUT_OR_UNKNOWN';
-  isHardBounce: boolean;
-  canRetry: boolean;
-  smtpCode: string;
-  enhancedCode?: string;
-  message: string;
-  rawError: string;
-}
-
-export function classifyEmailError(err: any): ClassifiedEmailError {
-  const str = String(err?.message || err?.response || err || '');
-  const lower = str.toLowerCase();
-
-  // 1. Permanent Recipient Failures (Hard Bounces)
-  // Specific checks for 550 5.1.1, NoSuchUser, User unknown, account does not exist
-  if (
-    lower.includes('550 5.1.1') ||
-    lower.includes('5.1.1') ||
-    lower.includes('nosuchuser') ||
-    lower.includes('user unknown') ||
-    lower.includes('does not exist') ||
-    lower.includes('account that you tried to reach does not exist') ||
-    lower.includes('recipient rejected') ||
-    lower.includes('mailbox unavailable') ||
-    lower.includes('no mailbox') ||
-    lower.includes('invalid recipient') ||
-    (lower.includes('550') && (lower.includes('unknown') || lower.includes('invalid') || lower.includes('not exist') || lower.includes('recipient')))
-  ) {
-    return {
-      category: 'HARD_BOUNCE',
-      isHardBounce: true,
-      canRetry: false,
-      smtpCode: '550 5.1.1',
-      enhancedCode: '5.1.1',
-      message: `Remote mail server rejected recipient (550 5.1.1 Hard Bounce: Mailbox does not exist): ${str}`,
-      rawError: str,
-    };
-  }
-
-  // 2. Authentication Failures
-  if (lower.includes('535') || lower.includes('authentication') || lower.includes('badcredentials') || lower.includes('invalid credentials')) {
-    return {
-      category: 'AUTHENTICATION_FAILURE',
-      isHardBounce: false,
-      canRetry: false,
-      smtpCode: '535',
-      message: 'SMTP/OAuth Authentication failed: Invalid username or App Password.',
-      rawError: str,
-    };
-  }
-
-  // 3. Provider Rate Limits / Quotas
-  if (lower.includes('429') || lower.includes('5.4.5') || lower.includes('daily user sending limit') || lower.includes('quota')) {
-    return {
-      category: 'RATE_LIMIT_EXCEEDED',
-      isHardBounce: false,
-      canRetry: true,
-      smtpCode: '429',
-      message: 'Provider daily sending limit reached (Gmail allows 500/day). Outreach paused to protect sender reputation.',
-      rawError: str,
-    };
-  }
-
-  // 4. Content / Spam / DMARC Rejections
-  if (lower.includes('554') || lower.includes('5.7.1') || lower.includes('spam') || lower.includes('dmarc') || lower.includes('blocked')) {
-    return {
-      category: 'MESSAGE_REJECTED',
-      isHardBounce: false,
-      canRetry: false,
-      smtpCode: '554 5.7.1',
-      message: `Message rejected by spam policy or DMARC alignment: ${str}`,
-      rawError: str,
-    };
-  }
-
-  // 5. Temporary Server Issues
-  if (lower.includes('421') || lower.includes('450') || lower.includes('451') || lower.includes('452') || lower.includes('try again later') || lower.includes('service not available')) {
-    return {
-      category: 'TEMPORARY_FAILURE',
-      isHardBounce: false,
-      canRetry: true,
-      smtpCode: lower.includes('421') ? '421' : lower.includes('451') ? '451' : '450',
-      message: `Temporary mail server issue: ${str}`,
-      rawError: str,
-    };
-  }
-
-  // 6. Network Timeouts
-  if (lower.includes('timeout') || lower.includes('timed out') || lower.includes('econnrefused') || lower.includes('econnreset')) {
-    return {
-      category: 'TIMEOUT_OR_UNKNOWN',
-      isHardBounce: false,
-      canRetry: true,
-      smtpCode: 'TIMEOUT',
-      message: `Connection timed out. Check existing send records before retrying to prevent duplicate emails.`,
-      rawError: str,
-    };
-  }
-
-  return {
-    category: 'TIMEOUT_OR_UNKNOWN',
-    isHardBounce: false,
-    canRetry: false,
-    smtpCode: 'UNKNOWN',
-    message: str || 'Mail dispatch failed.',
-    rawError: str,
-  };
-}
+import { classifyEmailError, ClassifiedEmailError } from './error-classifier';
+export { classifyEmailError };
+export type { ClassifiedEmailError };
 
 function getSmtpTransporter() {
   const host = process.env.SMTP_HOST;
@@ -294,47 +182,111 @@ export async function sendEmail({
   // 2. Try SMTP if configured
   const transporter = getSmtpTransporter();
   if (transporter) {
-    try {
-      const settings = await getAutomationSettings();
-      const senderName = settings.sender_name || process.env.SENDER_NAME || 'Muhammad Shoaib';
-      const senderEmail = settings.sender_email || process.env.SENDER_EMAIL || 'Mshoaibawan371@gmail.com';
+    const settings = await getAutomationSettings();
+    const senderName = settings.sender_name || process.env.SENDER_NAME || 'Muhammad Shoaib';
+    const senderEmail = settings.sender_email || process.env.SENDER_EMAIL || 'Mshoaibawan371@gmail.com';
 
-      const info = await transporter.sendMail({
-        from: `"${senderName}" <${senderEmail}>`,
-        to,
-        subject,
-        text,
-        html,
-      });
+    // Bounded retry policy for temporary SMTP failures (max 2 retries, total 3 attempts)
+    // Hard bounces (550 5.1.1) and authentication failures NEVER retry
+    const MAX_TEMP_RETRIES = 2;
+    let lastError: any = null;
 
-      return {
-        success: true,
-        status: 'accepted_by_provider',
-        provider: 'smtp',
-        providerMessageId: info.messageId,
-        message: 'Accepted by SMTP provider for delivery (SMTP 250 OK).',
-      };
-    } catch (e: any) {
-      const classified = classifyEmailError(e);
-      if (classified.isHardBounce) {
-        KNOWN_BOUNCED_OR_BLOCKED_EMAILS.add(normalizedTo);
-        await addToSuppressionList(
-          normalizedTo,
-          'hard_bounce',
-          'smtp_550_bounce',
-          classified.smtpCode,
-          classified.message
-        );
+    for (let attempt = 0; attempt <= MAX_TEMP_RETRIES; attempt++) {
+      try {
+        const info = await transporter.sendMail({
+          from: `"${senderName}" <${senderEmail}>`,
+          to,
+          subject,
+          text,
+          html,
+        });
+
+        return {
+          success: true,
+          status: 'accepted_by_provider',
+          provider: 'smtp',
+          providerMessageId: info.messageId,
+          message: 'Accepted by SMTP provider for delivery (SMTP 250 OK).',
+        };
+      } catch (e: any) {
+        lastError = e;
+        const classified = classifyEmailError(e);
+
+        // A. Permanent recipient hard bounces (550 5.1.1, NoSuchUser, User unknown)
+        // Rule: NO RETRY. Immediately suppress address and return failure.
+        if (classified.isHardBounce) {
+          KNOWN_BOUNCED_OR_BLOCKED_EMAILS.add(normalizedTo);
+          await addToSuppressionList(
+            normalizedTo,
+            'hard_bounce',
+            'smtp_550_bounce',
+            classified.smtpCode,
+            classified.message
+          );
+          return {
+            success: false,
+            status: 'bounced',
+            provider: 'smtp',
+            message: classified.message,
+            errorCategory: classified.category,
+            smtpCode: classified.smtpCode,
+            isHardBounce: true,
+          };
+        }
+
+        // B. Authentication failures (535 Invalid credentials)
+        // Rule: NO RETRY. Credentials must be fixed. Do not label recipient bounce.
+        if (classified.category === 'AUTHENTICATION_FAILURE') {
+          return {
+            success: false,
+            status: 'failed',
+            provider: 'smtp',
+            message: classified.message,
+            errorCategory: classified.category,
+            smtpCode: classified.smtpCode,
+            isHardBounce: false,
+          };
+        }
+
+        // C. Rate limit exceeded (429, 5.4.5 daily quota)
+        // Rule: NO IMMEDIATE RETRY. Paused to protect sender reputation.
+        if (classified.category === 'RATE_LIMIT_EXCEEDED') {
+          return {
+            success: false,
+            status: 'failed',
+            provider: 'smtp',
+            message: classified.message,
+            errorCategory: classified.category,
+            smtpCode: classified.smtpCode,
+            isHardBounce: false,
+          };
+        }
+
+        // D. Temporary failures (421, 450, 451) or network timeouts
+        // Rule: Retry with exponential backoff if attempts remaining
+        if (
+          (classified.category === 'TEMPORARY_FAILURE' || classified.category === 'TIMEOUT_OR_UNKNOWN') &&
+          attempt < MAX_TEMP_RETRIES
+        ) {
+          const delayMs = 1000 * Math.pow(2, attempt); // 1000ms, then 2000ms
+          console.warn(
+            `Temporary SMTP failure on attempt ${attempt + 1}/${MAX_TEMP_RETRIES + 1} (${classified.smtpCode}): ${classified.message}. Retrying in ${delayMs}ms...`
+          );
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+          continue;
+        }
+
+        // Max retries reached or message rejected by spam/DMARC policy
+        return {
+          success: false,
+          status: 'failed',
+          provider: 'smtp',
+          message: classified.message,
+          errorCategory: classified.category,
+          smtpCode: classified.smtpCode,
+          isHardBounce: false,
+        };
       }
-      return {
-        success: false,
-        status: classified.isHardBounce ? 'bounced' : 'failed',
-        provider: 'smtp',
-        message: classified.message,
-        errorCategory: classified.category,
-        smtpCode: classified.smtpCode,
-        isHardBounce: classified.isHardBounce,
-      };
     }
   }
 
@@ -584,9 +536,15 @@ export async function sendPitchToProspect(
     body,
     provider: res.provider,
     provider_message_id: res.providerMessageId,
-    status: res.status === 'accepted_by_provider' ? 'accepted_by_provider' : res.status,
-    error_code: res.errorCategory,
+    status: res.status === 'accepted_by_provider' ? 'accepted_by_provider' : (res.isHardBounce ? 'bounced' : res.status),
+    error_code: res.smtpCode || res.errorCategory,
     error_message: res.success ? undefined : res.message,
+    sanitized_error_details: {
+      smtp_code: res.smtpCode,
+      error_category: res.errorCategory,
+      is_hard_bounce: Boolean(res.isHardBounce),
+      raw_error: res.message,
+    },
     idempotency_key: `${lead.id}-${recipient}`,
   });
 

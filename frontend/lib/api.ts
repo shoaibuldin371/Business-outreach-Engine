@@ -116,9 +116,31 @@ export interface DatabaseTelemetry {
   primary_tables: DatabaseTableMeta[];
 }
 
+export interface FailedEmailDetail {
+  lead_id?: string;
+  business_name: string;
+  city?: string;
+  state?: string;
+  recipient_email: string;
+  delivery_status: 'bounced' | 'failed' | 'failed_permanently';
+  failure_category:
+    | 'HARD_BOUNCE'
+    | 'TEMPORARY_FAILURE'
+    | 'AUTHENTICATION_FAILURE'
+    | 'RATE_LIMIT_EXCEEDED'
+    | 'MESSAGE_REJECTED'
+    | 'TIMEOUT_OR_UNKNOWN';
+  smtp_error_code?: string;
+  actual_failure_reason: string;
+  timestamp: string;
+  is_suppressed: boolean;
+  can_retry: boolean;
+}
+
 export interface Stats {
   total_leads: number;
   no_website_count: number;
+  emails_queued?: number;
   pending_approval: number;
   rejected_count: number;
   sent_count: number;
@@ -126,6 +148,8 @@ export interface Stats {
   confirmed_delivered_count?: number;
   bounced_count?: number;
   failed_count?: number;
+  temporary_failures_count?: number;
+  auth_provider_errors_count?: number;
   replies_count?: number;
   positive_replies_count?: number;
   reply_rate_percentage?: number;
@@ -133,6 +157,7 @@ export interface Stats {
   active_pipelines_count?: number;
   total_logs: number;
   total_sent_emails: number;
+  failed_email_details?: FailedEmailDetail[];
   database?: DatabaseTelemetry;
 }
 

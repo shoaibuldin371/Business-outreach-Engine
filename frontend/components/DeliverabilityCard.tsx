@@ -137,8 +137,8 @@ export default function DeliverabilityCard() {
         </div>
       )}
 
-      {/* Deliverability Telemetry Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      {/* Deliverability Telemetry Grid (7 Distinct Operational Metrics) */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5 sm:gap-3">
         <div className="p-3.5 rounded-xl bg-slate-900/60 border border-white/5 space-y-1">
           <div className="text-[11px] text-slate-400 font-medium">Emails Queued</div>
           <div className="text-xl font-black text-slate-200">{metrics?.emails_queued ?? 0}</div>
@@ -170,9 +170,15 @@ export default function DeliverabilityCard() {
         </div>
 
         <div className="p-3.5 rounded-xl bg-slate-900/60 border border-white/5 space-y-1">
-          <div className="text-[11px] text-cyan-400 font-medium">Permanent Suppressed</div>
-          <div className="text-xl font-black text-cyan-300">{metrics?.suppression_list_size ?? 0}</div>
-          <div className="text-[10px] text-slate-400">0 automatic retries</div>
+          <div className="text-[11px] text-purple-400 font-medium">Auth / Quota</div>
+          <div className="text-xl font-black text-purple-300">{metrics?.auth_provider_errors_count ?? 0}</div>
+          <div className="text-[10px] text-slate-400">535 Auth / 429 Limit</div>
+        </div>
+
+        <div className="p-3.5 rounded-xl bg-slate-900/60 border border-white/5 space-y-1">
+          <div className="text-[11px] text-cyan-400 font-medium">Replies Received</div>
+          <div className="text-xl font-black text-cyan-300">{metrics?.replies_count ?? 0}</div>
+          <div className="text-[10px] text-slate-400">Prospect engaged</div>
         </div>
       </div>
 
@@ -260,6 +266,81 @@ export default function DeliverabilityCard() {
           </p>
         </div>
       </div>
+
+      {/* Failed Outreach Diagnostics (Audit Trail with Affected Lead & Failure Reason) */}
+      {metrics?.failed_email_details && metrics.failed_email_details.length > 0 && (
+        <div className="p-4 rounded-xl bg-[#090d1c] border border-rose-500/20 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold text-slate-200 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+              Failed Outreach Diagnostics ({metrics.failed_email_details.length} failed delivery events logged)
+            </h3>
+            <span className="text-[10px] text-slate-400">Actual Remote Server Failure Reasons</span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-white/5 text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                  <th className="pb-2">Affected Lead</th>
+                  <th className="pb-2">Recipient Email</th>
+                  <th className="pb-2">Failure Classification</th>
+                  <th className="pb-2">Actual Failure Reason (Remote Server Response)</th>
+                  <th className="pb-2">Action / Policy</th>
+                  <th className="pb-2">Timestamp</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5 text-slate-300">
+                {metrics.failed_email_details.map((item: any, idx: number) => (
+                  <tr key={idx} className="hover:bg-white/[0.02]">
+                    <td className="py-2.5 font-semibold text-white whitespace-nowrap">
+                      <div>{item.business_name}</div>
+                      {(item.city || item.state) && (
+                        <div className="text-[10px] text-slate-400 font-normal">
+                          {item.city}{item.state ? `, ${item.state}` : ''}
+                        </div>
+                      )}
+                    </td>
+                    <td className="py-2.5 font-mono text-cyan-300 whitespace-nowrap">{item.recipient_email}</td>
+                    <td className="py-2.5 whitespace-nowrap">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        item.failure_category === 'HARD_BOUNCE' || item.delivery_status === 'bounced'
+                          ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
+                          : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                      }`}>
+                        {item.smtp_error_code ? `${item.smtp_error_code} ` : ''}
+                        {item.failure_category.replace(/_/g, ' ')}
+                      </span>
+                    </td>
+                    <td className="py-2.5 text-slate-300 text-[11px] max-w-sm">
+                      <div className="line-clamp-2" title={item.actual_failure_reason}>
+                        {item.actual_failure_reason}
+                      </div>
+                    </td>
+                    <td className="py-2.5 whitespace-nowrap text-[11px]">
+                      {item.is_suppressed ? (
+                        <span className="text-rose-400 font-semibold">Permanently Suppressed (0 Retries)</span>
+                      ) : item.can_retry ? (
+                        <span className="text-amber-400 font-medium">Retryable with backoff</span>
+                      ) : (
+                        <span className="text-slate-400">Stopped</span>
+                      )}
+                    </td>
+                    <td className="py-2.5 text-slate-400 text-[11px] whitespace-nowrap font-mono">
+                      {new Date(item.timestamp).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Suppression List Table */}
       {metrics?.suppression_entries && metrics.suppression_entries.length > 0 && (

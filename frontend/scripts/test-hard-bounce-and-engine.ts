@@ -1,11 +1,14 @@
 import assert from 'assert';
-import { classifyEmailError } from '../lib/server/email';
+import { classifyEmailError, sendEmail, sendPitchToProspect } from '../lib/server/email';
 import { isSuppressed, addToSuppressionList, getSuppressionList } from '../lib/server/suppression';
 import { isValidEmailSyntax, isPlaceholderOrGuessedAddress, verifyEmailAddress, isCredibleEmailSourceUrl } from '../lib/server/verification';
 import { extractEmailWithSource, parseEmailsFromHtml } from '../lib/server/research';
 import { conductDigitalAudit, generateAuditPdfBuffer } from '../lib/server/audit';
 import { generateSecureToken, buildInitialRoiAssumptions, buildProposalForLead } from '../lib/server/personalized-page';
 import { BusinessLead } from '../lib/server/types';
+import { getDashboardStats } from '../lib/server/supabase';
+import { POST as handleWebhookPost } from '../app/api/outreach/webhook/route';
+import { NextRequest } from 'next/server';
 
 async function runTestSuite() {
   console.log('================================================================');
@@ -267,6 +270,152 @@ async function runTestSuite() {
     assert.ok(proposal.headline.includes(sampleLead.business_name), 'Headline incorporates business name');
     assert.strictEqual(proposal.recommended_service, 'ai_automation');
     assert.ok(proposal.core_deliverables.length >= 3, 'Must include clear deliverables');
+  });
+
+  // --------------------------------------------------------------------------
+  // TEST GROUP 6: Exact 550 5.1.1 Failure, Complete Suppression & Delivery Counts
+  // --------------------------------------------------------------------------
+  console.log('\n📦 GROUP 6: Exact 550 5.1.1 Suppression & Outreach Safety Guarantees');
+
+  await test('Exact 550 5.1.1 Gmail response is strictly classified as HARD_BOUNCE with zero retries', () => {
+    const exactError = '550 5.1.1 The email account that you tried to reach does not exist. Please try double-checking the recipient\'s email address.';
+    const classified = classifyEmailError(new Error(exactError));
+    assert.strictEqual(classified.category, 'HARD_BOUNCE');
+    assert.strictEqual(classified.isHardBounce, true, 'isHardBounce must be true');
+    assert.strictEqual(classified.canRetry, false, 'canRetry must be false (NO RETRY)');
+    assert.strictEqual(classified.smtpCode, '550 5.1.1');
+    assert.ok(classified.message.includes('550 5.1.1 Hard Bounce: Mailbox does not exist'));
+  });
+
+  await test('sendEmail blocks suppressed address (info@unstructured.io) immediately without attempting SMTP', async () => {
+    const res = await sendEmail({
+      to: 'info@unstructured.io',
+      subject: 'Test Subject',
+      text: 'Test Body',
+    });
+    assert.strictEqual(res.success, false, 'Send must fail for suppressed address');
+    assert.strictEqual(res.status, 'bounced', 'Status must be bounced');
+    assert.strictEqual(res.isHardBounce, true, 'Must report isHardBounce: true');
+    assert.strictEqual(res.smtpCode, '550 5.1.1');
+    assert.strictEqual(res.provider, 'none', 'Must not connect to any mail provider');
+    assert.ok(res.message.includes('suppression list'));
+  });
+
+  await test('sendPitchToProspect blocks outreach to suppressed recipient and marks lead bounced', async () => {
+    const suppressedLead: BusinessLead = {
+      id: 'lead-test-suppressed-001',
+      business_name: 'Unstructured Technologies Audit Copy',
+      email: 'info@unstructured.io',
+      status: 'pending_approval',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    const res = await sendPitchToProspect(suppressedLead);
+    assert.strictEqual(res.success, false, 'Outreach dispatch must be blocked');
+    assert.ok(res.message.includes('permanently suppressed'));
+  });
+
+  await test('Unrelated valid prospect with credible public email remains eligible for outreach', async () => {
+    const validLead: BusinessLead = {
+      id: 'lead-test-valid-google-001',
+      business_name: 'Google Press Office',
+      email: 'press@google.com',
+      email_source_url: 'https://about.google/contact',
+      status: 'pending_approval',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    const isSupp = await isSuppressed(validLead.email!);
+    assert.strictEqual(isSupp, false, 'Legitimate email must NOT be suppressed');
+
+    const verified = await verifyEmailAddress(validLead.email!, validLead.email_source_url);
+    assert.strictEqual(verified.eligibleForOutreach, true, 'Legitimate email must remain eligible');
+  });
+
+  await test('Gmail authentication failure (535) is classified as AUTHENTICATION_FAILURE (NOT recipient bounce)', () => {
+    const authError = '535-5.7.8 Username and Password not accepted. Learn more at https://support.google.com/mail/?p=BadCredentials';
+    const classified = classifyEmailError(new Error(authError));
+    assert.strictEqual(classified.category, 'AUTHENTICATION_FAILURE');
+    assert.strictEqual(classified.isHardBounce, false, 'Auth error is NOT a recipient bounce');
+    assert.strictEqual(classified.canRetry, false, 'Auth error credentials must be resolved manually');
+    assert.strictEqual(classified.smtpCode, '535');
+  });
+
+  await test('Provider sending quota (429/5.4.5) is classified as RATE_LIMIT_EXCEEDED (NOT recipient bounce)', () => {
+    const quotaError = '429 5.4.5 Daily user sending limit exceeded for user Mshoaibawan371@gmail.com';
+    const classified = classifyEmailError(new Error(quotaError));
+    assert.strictEqual(classified.category, 'RATE_LIMIT_EXCEEDED');
+    assert.strictEqual(classified.isHardBounce, false, 'Daily quota is NOT a recipient bounce');
+    assert.strictEqual(classified.smtpCode, '429');
+  });
+
+  await test('getDashboardStats provides 7 separate delivery counts and failed email audit trail', async () => {
+    const stats = await getDashboardStats();
+    assert.ok(typeof stats.emails_queued === 'number', 'emails_queued must be a number');
+    assert.ok(typeof stats.accepted_by_provider_count === 'number', 'accepted_by_provider_count must be a number');
+    assert.ok(typeof stats.confirmed_delivered_count === 'number', 'confirmed_delivered_count must be a number');
+    assert.ok(typeof stats.bounced_count === 'number', 'bounced_count must be a number');
+    assert.ok(typeof stats.temporary_failures_count === 'number', 'temporary_failures_count must be a number');
+    assert.ok(typeof stats.auth_provider_errors_count === 'number', 'auth_provider_errors_count must be a number');
+    assert.ok(typeof stats.replies_count === 'number', 'replies_count must be a number');
+
+    assert.ok(Array.isArray(stats.failed_email_details), 'failed_email_details must be an array');
+    const unstructuredFailure = stats.failed_email_details.find(
+      (f) => f.recipient_email.toLowerCase() === 'info@unstructured.io'
+    );
+    assert.ok(unstructuredFailure, 'Audit entry for info@unstructured.io must be present');
+    assert.strictEqual(unstructuredFailure.delivery_status, 'bounced');
+    assert.strictEqual(unstructuredFailure.is_suppressed, true);
+    assert.strictEqual(unstructuredFailure.can_retry, false);
+    assert.ok(unstructuredFailure.actual_failure_reason.includes('550 5.1.1'));
+    assert.strictEqual(unstructuredFailure.business_name, 'Unstructured Technologies');
+  });
+
+  await test('Webhook endpoint processes hard bounce event and idempotently prevents duplicate processing', async () => {
+    const testBounceEmail = 'webhook-bounce-unit-test@example-bounce.org';
+    const eventId = `test-evt-bounce-${Date.now()}`;
+
+    const mockRequest1 = new NextRequest('http://localhost:3000/api/outreach/webhook', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        event_id: eventId,
+        event_type: 'hard_bounce',
+        recipient: testBounceEmail,
+        smtp_code: '550 5.1.1',
+        error: '550 5.1.1 The email account that you tried to reach does not exist.',
+      }),
+    });
+
+    const res1 = await handleWebhookPost(mockRequest1);
+    const body1 = await res1.json();
+    assert.strictEqual(body1.success, true);
+    assert.strictEqual(body1.action, 'suppressed_hard_bounce');
+
+    // Confirm email is now suppressed
+    const isSupp = await isSuppressed(testBounceEmail);
+    assert.strictEqual(isSupp, true, 'Address must be suppressed via webhook event');
+
+    // Send the EXACT SAME webhook event again to verify idempotency
+    const mockRequestDuplicate = new NextRequest('http://localhost:3000/api/outreach/webhook', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        event_id: eventId,
+        event_type: 'hard_bounce',
+        recipient: testBounceEmail,
+        smtp_code: '550 5.1.1',
+        error: '550 5.1.1 The email account that you tried to reach does not exist.',
+      }),
+    });
+
+    const res2 = await handleWebhookPost(mockRequestDuplicate);
+    const body2 = await res2.json();
+    assert.strictEqual(body2.success, true);
+    assert.strictEqual(body2.idempotent, true, 'Duplicate webhook event must be recognized as idempotent');
+    assert.strictEqual(body2.message, 'Duplicate event ignored (idempotent)');
   });
 
   console.log('\n================================================================');
