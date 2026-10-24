@@ -127,6 +127,20 @@ export async function runDiscoveryCycle(
           continue;
         }
 
+        // Pre-check: If candidate had a pre-seeded or cached email that is suppressed, clear it
+        if (candidate.email && (await isSuppressed(candidate.email))) {
+          await insertLog(
+            'explore',
+            'info',
+            `Candidate '${name}' had suppressed email '${candidate.email}' (prior 550 hard bounce). Removed email to prevent sending.`,
+            { business: name, email: candidate.email },
+            undefined,
+            run.id
+          );
+          candidate.email = undefined;
+          candidate.email_verification_status = 'suppressed';
+        }
+
         // Step A: Audit Website Presence
         const audit = await verifyBusinessWebsite(name, candidate.city, candidate.website);
 
@@ -196,7 +210,8 @@ export async function runDiscoveryCycle(
         let validContactEmail = '';
         let emailVerificationStatus: EmailVerificationStatus = 'missing';
         const rawEmail = (research.public_email || candidate.email || '').trim().toLowerCase();
-        const emailSourceUrl = research.contact_evidence?.email_source_url || candidate.evidence_url;
+        const emailSourceUrl = research.contact_evidence?.email_source_url || (candidate.email ? candidate.source_url : undefined);
+        const emailDiscoveredAt = research.contact_evidence?.verified_at || new Date().toISOString();
 
         if (rawEmail) {
           const adminEmail = (settings.admin_notification_email || settings.sender_email || 'mshoaibawan371@gmail.com').toLowerCase();
@@ -207,6 +222,7 @@ export async function runDiscoveryCycle(
             if (verification.eligibleForOutreach) {
               validContactEmail = rawEmail;
             } else {
+              validContactEmail = '';
               await insertLog(
                 'explore',
                 'info',
@@ -261,8 +277,8 @@ export async function runDiscoveryCycle(
           address: candidate.address,
           phone: research.public_phone || candidate.phone || '',
           email: validContactEmail || undefined,
-          email_source_url: emailSourceUrl,
-          email_discovered_at: validContactEmail ? new Date().toISOString() : undefined,
+          email_source_url: validContactEmail ? emailSourceUrl : undefined,
+          email_discovered_at: validContactEmail ? emailDiscoveredAt : undefined,
           email_verification_status: emailVerificationStatus,
           website: audit.checkedUrl || candidate.website || '',
           website_status: audit.status,
@@ -341,7 +357,7 @@ export async function runDiscoveryCycle(
         );
 
         // Step G: Automatic Outreach Dispatch (Direct to prospect) or HITL review
-        if (hasContactEmail) {
+        if (hasContactEmail && validContactEmail) {
           if (settings.require_manual_approval) {
             await sendHitlApprovalEmail(savedLead, token);
           } else {
@@ -373,6 +389,15 @@ export async function runDiscoveryCycle(
               );
             }
           }
+        } else {
+          await insertLog(
+            'draft',
+            'info',
+            `Candidate '${name}' saved as 'missing_contact'. Outreach skipped because no credible public email was found.`,
+            { business: name, city: candidate.city },
+            savedLead.id,
+            run.id
+          );
         }
       } catch (leadError: any) {
         errorCount++;

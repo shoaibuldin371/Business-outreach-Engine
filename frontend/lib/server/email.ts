@@ -268,6 +268,26 @@ export async function sendEmail({
         message: 'Accepted by connected Gmail OAuth API for delivery.',
       };
     }
+    const classified = classifyEmailError(gmailResult.error);
+    if (classified.isHardBounce) {
+      KNOWN_BOUNCED_OR_BLOCKED_EMAILS.add(normalizedTo);
+      await addToSuppressionList(
+        normalizedTo,
+        'hard_bounce',
+        'gmail_api_550_bounce',
+        classified.smtpCode,
+        classified.message
+      );
+      return {
+        success: false,
+        status: 'bounced',
+        provider: 'gmail_oauth',
+        message: classified.message,
+        errorCategory: classified.category,
+        smtpCode: classified.smtpCode,
+        isHardBounce: true,
+      };
+    }
     console.warn('Gmail OAuth send failed, falling back to SMTP:', gmailResult.error);
   }
 
@@ -475,20 +495,29 @@ export async function sendPitchToProspect(
 ): Promise<{ success: boolean; message: string; provider?: string }> {
   const recipient = lead.email?.trim();
 
-  if (!recipient || isBlockedOrBouncedEmail(recipient) || (await isSuppressed(recipient))) {
+  if (!recipient) {
+    await updateLead(lead.id, {
+      status: 'missing_contact',
+      email_verification_status: 'missing',
+      notes: `${lead.notes || ''}\n[DISPATCH SKIPPED: Lead has no verified public email address.]`.trim(),
+    });
+    return { success: false, message: 'Lead has no verified email address. Outreach skipped.' };
+  }
+
+  if (isBlockedOrBouncedEmail(recipient) || (await isSuppressed(recipient))) {
     await updateLead(lead.id, {
       status: 'bounced',
       email_verification_status: 'bounced',
-      notes: `${lead.notes || ''}\n[BLOCKED: Recipient '${recipient || 'empty'}' is in suppression list (bounced or opted-out).]`.trim(),
+      notes: `${lead.notes || ''}\n[BLOCKED: Recipient '${recipient}' is permanently suppressed (prior 550 hard bounce or opt-out).]`.trim(),
     });
     await insertLog(
       'error',
       'warning',
-      `Cannot send outreach: ${lead.business_name} recipient '${recipient || 'empty'}' is suppressed or blocked. Outreach permanently prevented.`,
+      `Cannot send outreach: ${lead.business_name} recipient '${recipient}' is permanently suppressed (550 Hard Bounce). Outreach prevented.`,
       { lead_id: lead.id, recipient },
       lead.id
     );
-    return { success: false, message: `Prospect email '${recipient || 'empty'}' is suppressed or blocked.` };
+    return { success: false, message: `Prospect email '${recipient}' is permanently suppressed.` };
   }
 
   // Idempotency check: Check if already sent
@@ -586,7 +615,18 @@ export async function sendPitchToProspect(
       lead.id
     );
   } else {
-    const isHardBounce = res.status === 'bounced';
+    const isHardBounce = res.status === 'bounced' || Boolean(res.isHardBounce);
+    if (isHardBounce) {
+      KNOWN_BOUNCED_OR_BLOCKED_EMAILS.add(recipient.toLowerCase());
+      await addToSuppressionList(
+        recipient,
+        'hard_bounce',
+        'smtp_550_bounce',
+        res.smtpCode || '550 5.1.1',
+        res.message
+      );
+    }
+
     await updateLead(lead.id, {
       status: isHardBounce ? 'bounced' : 'failed',
       email_verification_status: isHardBounce ? 'bounced' : undefined,
@@ -599,7 +639,7 @@ export async function sendPitchToProspect(
           lead_id: lead.id,
           event_type: isHardBounce ? 'bounced' : 'failed',
           channel: 'email',
-          payload: { recipient, error: res.message, category: res.errorCategory },
+          payload: { recipient, error: res.message, category: res.errorCategory, smtpCode: res.smtpCode },
         });
       } catch {}
     }
@@ -608,7 +648,7 @@ export async function sendPitchToProspect(
       'error',
       'error',
       `Failed to deliver outreach to ${lead.business_name}: ${res.message}`,
-      { recipient, error: res.message, errorCategory: res.errorCategory },
+      { recipient, error: res.message, errorCategory: res.errorCategory, isHardBounce },
       lead.id
     );
   }

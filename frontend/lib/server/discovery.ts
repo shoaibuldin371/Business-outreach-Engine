@@ -1,4 +1,5 @@
 import { findExistingLeadByNameAndCity, getClient, getLeads } from './supabase';
+import { isSuppressed } from './suppression';
 import type { 
   ServiceCategory, 
   DemandSignalType, 
@@ -1274,6 +1275,12 @@ export async function discoverBusinesses(
 
   for (const c of candidatePool) {
     if (!c.business_name || c.business_name.trim().length < 3) continue;
+
+    // Filter out permanently suppressed emails (prevent re-selecting hard bounces)
+    if (c.email && (await isSuppressed(c.email))) {
+      c.email = undefined;
+      c.email_verification_status = 'suppressed';
+    }
 
     const norm = normalizeBusinessName(c.business_name);
     const rawLower = c.business_name.toLowerCase().trim();

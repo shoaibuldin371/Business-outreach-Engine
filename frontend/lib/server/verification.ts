@@ -375,10 +375,33 @@ export function isPlaceholderOrGuessedAddress(email: string): boolean {
   return false;
 }
 
+export function isCredibleEmailSourceUrl(url?: string): boolean {
+  if (!url || typeof url !== 'string') return false;
+  const trimmed = url.trim().toLowerCase();
+  if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+    return trimmed.includes('verified public registry') || trimmed.includes('official directory listing');
+  }
+  const searchOrDummyPatterns = [
+    'duckduckgo.com',
+    'google.',
+    'bing.com',
+    'search.brave.com',
+    'yahoo.com',
+    'yandex.com',
+    'baidu.com',
+    'example.com',
+    'domain.com',
+    'placeholder.com',
+    'test.com',
+  ];
+  return !searchOrDummyPatterns.some((pattern) => trimmed.includes(pattern));
+}
+
 /**
  * Rigorously verifies an email address prior to outreach.
- * Distinguishes syntax validation, DNS MX resolution, suppression checks, and source provenance.
+ * Distinguishes syntax validation, DNS MX resolution, suppression checks, and credible source provenance.
  * Transparently acknowledges that MX verification does NOT guarantee mailbox existence.
+ * Only emails extracted from credible public sources with active MX are eligible for outreach.
  */
 export async function verifyEmailAddress(
   email: string | undefined,
@@ -412,7 +435,7 @@ export async function verifyEmailAddress(
       isPlaceholderOrGuess: false,
       status: 'invalid_syntax',
       eligibleForOutreach: false,
-      rejectionReason: 'Email syntax fails RFC standards.',
+      rejectionReason: 'Email syntax fails RFC standards or contains malformed characters.',
       checkedAt: now,
     };
   }
@@ -427,7 +450,7 @@ export async function verifyEmailAddress(
       isPlaceholderOrGuess: true,
       status: 'placeholder_rejected',
       eligibleForOutreach: false,
-      rejectionReason: 'Address is a placeholder, dummy domain, or unsubstantiated guess.',
+      rejectionReason: 'Address is a placeholder, dummy domain, or unsupported guess.',
       checkedAt: now,
     };
   }
@@ -472,14 +495,31 @@ export async function verifyEmailAddress(
     };
   }
 
-  // 5. Qualified & eligible
+  // 5. Source Provenance & Credibility Check
+  if (!isCredibleEmailSourceUrl(sourceUrl)) {
+    return {
+      email: cleanEmail,
+      isValidSyntax: true,
+      hasMxRecords: true,
+      isSuppressed: false,
+      isPlaceholderOrGuess: true,
+      status: 'missing',
+      eligibleForOutreach: false,
+      rejectionReason: 'Email was not discovered on a credible public website or verified contact page. Unsupported guesses are prohibited.',
+      sourceUrl,
+      checkedAt: now,
+    };
+  }
+
+  // 6. Qualified & eligible: Publicly Sourced and MX Checked
+  // Note: An active MX record confirms domain mail handling, but does not prove the specific mailbox exists.
   return {
     email: cleanEmail,
     isValidSyntax: true,
     hasMxRecords: true,
     isSuppressed: false,
     isPlaceholderOrGuess: false,
-    status: sourceUrl ? 'publicly_sourced_and_mx_checked' : 'syntax_and_mx_verified',
+    status: 'publicly_sourced_and_mx_checked',
     eligibleForOutreach: true,
     sourceUrl,
     checkedAt: now,

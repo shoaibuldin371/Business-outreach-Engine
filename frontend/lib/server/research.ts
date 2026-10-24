@@ -59,12 +59,17 @@ async function checkDomainMx(domain: string): Promise<boolean> {
 }
 
 import { isSuppressed } from './suppression';
+import { isValidEmailSyntax, isPlaceholderOrGuessedAddress, isCredibleEmailSourceUrl } from './verification';
+import { isBlockedOrBouncedEmail } from './email';
 
 export function parseEmailsFromHtml(html: string): string[] {
   const matches = html.match(EMAIL_REGEX) || [];
   const results: string[] = [];
   for (const m of matches) {
-    const lower = m.toLowerCase();
+    const lower = m.toLowerCase().trim();
+    if (!isValidEmailSyntax(lower) || isPlaceholderOrGuessedAddress(lower) || isBlockedOrBouncedEmail(lower)) {
+      continue;
+    }
     const domain = lower.split('@')[1];
     if (
       domain &&
@@ -74,6 +79,12 @@ export function parseEmailsFromHtml(html: string): string[] {
       !domain.endsWith('.jpeg') &&
       !domain.endsWith('.webp') &&
       !domain.endsWith('.svg') &&
+      !domain.endsWith('.gif') &&
+      !domain.endsWith('.ico') &&
+      !domain.endsWith('.css') &&
+      !domain.endsWith('.js') &&
+      !domain.endsWith('.woff') &&
+      !domain.endsWith('.woff2') &&
       !lower.includes('shoaib') &&
       !lower.includes('duckduckgo')
     ) {
@@ -85,7 +96,9 @@ export function parseEmailsFromHtml(html: string): string[] {
   return results;
 }
 
-export async function extractEmailWithSource(rawUrl: string): Promise<{ email: string; sourceUrl: string } | undefined> {
+export async function extractEmailWithSource(
+  rawUrl: string
+): Promise<{ email: string; sourceUrl: string; verifiedAt: string } | undefined> {
   const cleanUrl = rawUrl.startsWith('http') ? rawUrl : `https://${rawUrl}`;
   const candidates = [cleanUrl];
 
@@ -94,12 +107,17 @@ export async function extractEmailWithSource(rawUrl: string): Promise<{ email: s
     candidates.push(`${origin}/contact`);
     candidates.push(`${origin}/contact-us`);
     candidates.push(`${origin}/about`);
+    candidates.push(`${origin}/about-us`);
+    candidates.push(`${origin}/team`);
+    candidates.push(`${origin}/get-in-touch`);
   } catch {}
+
+  const now = new Date().toISOString();
 
   for (const target of candidates) {
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 4000);
+      const timeout = setTimeout(() => controller.abort(), 4500);
       const resp = await fetch(target, {
         headers: {
           'User-Agent':
@@ -118,7 +136,7 @@ export async function extractEmailWithSource(rawUrl: string): Promise<{ email: s
         const domain = email.split('@')[1];
         const hasMx = await checkDomainMx(domain);
         if (hasMx) {
-          return { email, sourceUrl: target };
+          return { email, sourceUrl: target, verifiedAt: now };
         }
       }
     } catch {
@@ -135,17 +153,19 @@ export async function extractEmailFromWebsite(rawUrl: string): Promise<string | 
 }
 
 /**
- * Searches for public contact details from web directories, search engines, and domain MX
+ * Searches for public contact details from verified business web pages and official profiles.
+ * NEVER extracts emails from third-party search snippet text or guesses role mailboxes.
  */
 async function searchPublicContactDetails(
   businessName: string,
   city: string
-): Promise<{ email?: string; sourceUrl?: string; socialProfiles: Record<string, string> }> {
+): Promise<{ email?: string; sourceUrl?: string; verifiedAt?: string; socialProfiles: Record<string, string> }> {
   const socialProfiles: Record<string, string> = {};
   let email: string | undefined = undefined;
   let sourceUrl: string | undefined = undefined;
+  let verifiedAt: string | undefined = undefined;
 
-  // Tier 1: Brave Search if API key configured
+  // Tier 1: Brave Search if API key configured (extract official websites and social profiles)
   if (process.env.BRAVE_SEARCH_API_KEY) {
     try {
       const query = `"${businessName}" "${city}" contact email OR "facebook.com" OR "instagram.com"`;
@@ -164,7 +184,6 @@ async function searchPublicContactDetails(
         const results = data.web?.results || [];
 
         for (const r of results) {
-          const text = `${r.title || ''} ${r.description || ''}`;
           const url = r.url || '';
 
           if (url.includes('facebook.com/')) socialProfiles.facebook = url;
@@ -172,18 +191,14 @@ async function searchPublicContactDetails(
           if (url.includes('linkedin.com/')) socialProfiles.linkedin = url;
           if (url.includes('yelp.com/biz/')) socialProfiles.yelp = url;
 
-          if (!email) {
-            const matches = text.match(EMAIL_REGEX);
-            if (matches) {
-              for (const m of matches) {
-                const lower = m.toLowerCase();
-                const domain = lower.split('@')[1];
-                if (!IGNORE_DOMAINS.includes(domain) && !lower.includes('shoaib')) {
-                  email = lower;
-                  sourceUrl = url;
-                  break;
-                }
-              }
+          // Only crawl the actual candidate official website, never take snippet text
+          if (!email && !url.includes('yelp.com') && !url.includes('yellowpages.com') && isCredibleEmailSourceUrl(url)) {
+            const extracted = await extractEmailWithSource(url);
+            if (extracted) {
+              email = extracted.email;
+              sourceUrl = extracted.sourceUrl;
+              verifiedAt = extracted.verifiedAt;
+              break;
             }
           }
         }
@@ -196,7 +211,7 @@ async function searchPublicContactDetails(
   // Tier 2: Public Web Engine Crawl & Direct Contact Page Inspection
   if (!email) {
     try {
-      const query = `"${businessName}" "${city}" contact email OR info OR "contact-us"`;
+      const query = `"${businessName}" "${city}" contact OR "contact-us"`;
       const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 4500);
@@ -212,25 +227,13 @@ async function searchPublicContactDetails(
       if (resp.ok) {
         const html = await resp.text();
 
-        // 1. Check snippet text for direct email
-        const snippetEmails = html.match(EMAIL_REGEX) || [];
-        for (const m of snippetEmails) {
-          const lower = m.toLowerCase();
-          const domain = lower.split('@')[1];
-          if (domain && !IGNORE_DOMAINS.includes(domain) && !lower.includes('shoaib') && !lower.includes('duckduckgo')) {
-            email = lower;
-            sourceUrl = searchUrl;
-            break;
-          }
-        }
-
-        // 2. Extract potential business candidate URLs from results
+        // Extract potential official business candidate URLs from results (do NOT extract snippets)
         const urlMatches = Array.from(html.matchAll(/uddg=([^&"']+)/g));
         const candidateUrls: string[] = [];
         for (const m of urlMatches) {
           try {
             const decoded = decodeURIComponent(m[1]);
-            if (!decoded.includes('duckduckgo.com') && !decoded.includes('google.com')) {
+            if (!decoded.includes('duckduckgo.com') && !decoded.includes('google.com') && isCredibleEmailSourceUrl(decoded)) {
               candidateUrls.push(decoded);
             }
           } catch {}
@@ -243,10 +246,11 @@ async function searchPublicContactDetails(
           if (u.includes('yelp.com/biz/')) socialProfiles.yelp = u;
 
           if (!email && !u.includes('yelp.com') && !u.includes('yellowpages.com')) {
-            const scraped = await extractEmailFromWebsite(u);
-            if (scraped) {
-              email = scraped;
-              sourceUrl = u;
+            const extracted = await extractEmailWithSource(u);
+            if (extracted) {
+              email = extracted.email;
+              sourceUrl = extracted.sourceUrl;
+              verifiedAt = extracted.verifiedAt;
               break;
             }
           }
@@ -257,16 +261,18 @@ async function searchPublicContactDetails(
     }
   }
 
-  // Only return an email if it was genuinely extracted from their web page or verified public profile
-  // NEVER synthesize or guess role mailboxes (e.g. contact@domain) because unconfigured mailboxes bounce (550 Recipient rejected).
+  // Only return an email if it was genuinely extracted from an official web page
+  // NEVER synthesize or guess role mailboxes (e.g. info@domain) because unconfigured mailboxes bounce (550 5.1.1).
   if (email) {
     const lower = email.toLowerCase().trim();
     if (lower.includes('mshoaibuldin371') || lower.includes('mshoaibawan371') || lower.includes('shoaib')) {
       email = undefined;
+      sourceUrl = undefined;
+      verifiedAt = undefined;
     }
   }
 
-  return { email, sourceUrl, socialProfiles };
+  return { email, sourceUrl, verifiedAt, socialProfiles };
 }
 
 /**
@@ -305,8 +311,12 @@ export async function conductBusinessResearch(
   // Step B: If no email found on website and initial email provided, verify it strictly
   if (!publicEmail && initialEmail) {
     const candidateLower = initialEmail.trim().toLowerCase();
-    const isSupp = await isSuppressed(candidateLower);
-    if (!isSupp) {
+    if (
+      isValidEmailSyntax(candidateLower) &&
+      !isPlaceholderOrGuessedAddress(candidateLower) &&
+      !isBlockedOrBouncedEmail(candidateLower) &&
+      !(await isSuppressed(candidateLower))
+    ) {
       const domain = candidateLower.split('@')[1] || '';
       const hasMx = await checkDomainMx(domain);
       if (hasMx) {
@@ -316,16 +326,16 @@ export async function conductBusinessResearch(
     }
   }
 
-  // Step C: Fallback to public search engines
+  // Step C: Fallback to public search engines for official web pages
   const publicSearch = await searchPublicContactDetails(businessName, city);
   const socialProfiles = publicSearch.socialProfiles;
 
-  if (!publicEmail && publicSearch.email) {
+  if (!publicEmail && publicSearch.email && publicSearch.sourceUrl) {
     const isSupp = await isSuppressed(publicSearch.email);
     if (!isSupp) {
       publicEmail = publicSearch.email;
       emailSourceUrl = publicSearch.sourceUrl;
-      if (emailSourceUrl) sourceUrls.push(emailSourceUrl);
+      sourceUrls.push(emailSourceUrl);
     }
   }
 

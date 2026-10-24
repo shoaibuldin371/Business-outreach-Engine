@@ -1,7 +1,7 @@
 import assert from 'assert';
 import { classifyEmailError } from '../lib/server/email';
 import { isSuppressed, addToSuppressionList, getSuppressionList } from '../lib/server/suppression';
-import { isValidEmailSyntax, isPlaceholderOrGuessedAddress, verifyEmailAddress } from '../lib/server/verification';
+import { isValidEmailSyntax, isPlaceholderOrGuessedAddress, verifyEmailAddress, isCredibleEmailSourceUrl } from '../lib/server/verification';
 import { extractEmailWithSource, parseEmailsFromHtml } from '../lib/server/research';
 import { conductDigitalAudit, generateAuditPdfBuffer } from '../lib/server/audit';
 import { generateSecureToken, buildInitialRoiAssumptions, buildProposalForLead } from '../lib/server/personalized-page';
@@ -51,6 +51,14 @@ async function runTestSuite() {
     assert.strictEqual(result.category, 'HARD_BOUNCE');
   });
 
+  await test('Detects "550 User unknown" and "mailbox unavailable" as HARD_BOUNCE', () => {
+    const rawError = '550 User unknown: mailbox unavailable';
+    const result = classifyEmailError(new Error(rawError));
+    assert.strictEqual(result.isHardBounce, true);
+    assert.strictEqual(result.canRetry, false);
+    assert.strictEqual(result.category, 'HARD_BOUNCE');
+  });
+
   await test('Detects temporary rate limit or 421 deferral as retriable TEMPORARY_FAILURE', () => {
     const rawError = '421 4.7.0 Try again later, closing transmission channel';
     const result = classifyEmailError(new Error(rawError));
@@ -87,35 +95,105 @@ async function runTestSuite() {
     assert.strictEqual(isNowSuppressed, true, 'Dynamically added email must be suppressed');
   });
 
+  await test('verifyEmailAddress rejects suppressed email (info@unstructured.io) even if provided with website URL', async () => {
+    const res = await verifyEmailAddress('info@unstructured.io', 'https://unstructured.io/contact');
+    assert.strictEqual(res.eligibleForOutreach, false, 'Suppressed email must never be eligible for outreach');
+    assert.strictEqual(res.status, 'suppressed');
+    assert.ok(res.rejectionReason?.includes('permanently suppressed'));
+  });
+
+  await test('Unrelated valid address remains eligible and is not affected by suppression', async () => {
+    const res = await verifyEmailAddress('press@google.com', 'https://about.google/contact');
+    assert.strictEqual(res.eligibleForOutreach, true, 'Unrelated legitimate address must remain eligible');
+    assert.strictEqual(res.status, 'publicly_sourced_and_mx_checked');
+  });
+
   // --------------------------------------------------------------------------
   // TEST GROUP 3: Contact Verification & Anti-Fabrication Safeguards
   // --------------------------------------------------------------------------
-  console.log('\n📦 GROUP 3: Contact Verification & Sourcing Rules');
+  console.log('\n📦 GROUP 3: Contact Verification & Sourcing Rules (Missing, Malformed, Guessed, Valid)');
 
-  await test('Rejects syntax-invalid emails and placeholder patterns', () => {
+  await test('Missing email: Rejects undefined, empty, or whitespace email addresses', async () => {
+    const resUndefined = await verifyEmailAddress(undefined);
+    assert.strictEqual(resUndefined.eligibleForOutreach, false);
+    assert.strictEqual(resUndefined.status, 'missing');
+
+    const resEmpty = await verifyEmailAddress('');
+    assert.strictEqual(resEmpty.eligibleForOutreach, false);
+    assert.strictEqual(resEmpty.status, 'missing');
+
+    const resSpaces = await verifyEmailAddress('   ');
+    assert.strictEqual(resSpaces.eligibleForOutreach, false);
+    assert.strictEqual(resSpaces.status, 'missing');
+  });
+
+  await test('Malformed email: Rejects syntax-invalid emails and RFC violations', async () => {
     assert.strictEqual(isValidEmailSyntax('not-an-email'), false);
     assert.strictEqual(isValidEmailSyntax('user@localhost'), false);
+    assert.strictEqual(isValidEmailSyntax('user..name@domain.com'), false);
+    assert.strictEqual(isValidEmailSyntax('user@.com'), false);
+    assert.strictEqual(isValidEmailSyntax('user@domain'), false);
+
+    const resInvalid = await verifyEmailAddress('malformed-address@');
+    assert.strictEqual(resInvalid.eligibleForOutreach, false);
+    assert.strictEqual(resInvalid.status, 'invalid_syntax');
+  });
+
+  await test('Guessed email: Rejects placeholder patterns and generic role mailbox guesses', async () => {
     assert.strictEqual(isPlaceholderOrGuessedAddress('info@domain.com'), true);
     assert.strictEqual(isPlaceholderOrGuessedAddress('admin@website.com'), true);
     assert.strictEqual(isPlaceholderOrGuessedAddress('yourname@company.com'), true);
+    assert.strictEqual(isPlaceholderOrGuessedAddress('test@placeholder.com'), true);
+
+    const resPlaceholder = await verifyEmailAddress('info@domain.com', 'https://domain.com');
+    assert.strictEqual(resPlaceholder.eligibleForOutreach, false);
+    assert.strictEqual(resPlaceholder.status, 'placeholder_rejected');
   });
 
-  await test('parseEmailsFromHtml only extracts legitimate public emails from website HTML', () => {
+  await test('Unsupported guess: Rejects email lacking a credible public source URL or derived from search snippet', async () => {
+    // 1. Missing sourceUrl is an unsupported guess
+    const resNoSource = await verifyEmailAddress('contact@mybusiness.com', undefined);
+    assert.strictEqual(resNoSource.eligibleForOutreach, false, 'Must reject email without credible source URL');
+    assert.strictEqual(resNoSource.status, 'missing');
+
+    // 2. Search engine snippet URL is not an official credible source URL
+    assert.strictEqual(isCredibleEmailSourceUrl('https://html.duckduckgo.com/html/?q=search'), false);
+    assert.strictEqual(isCredibleEmailSourceUrl('https://www.google.com/search?q=email'), false);
+    assert.strictEqual(isCredibleEmailSourceUrl('https://search.brave.com/res/v1/web/search'), false);
+
+    const resSnippet = await verifyEmailAddress('contact@mybusiness.com', 'https://html.duckduckgo.com/html/?q=mybusiness');
+    assert.strictEqual(resSnippet.eligibleForOutreach, false, 'Search engine snippets are not credible source URLs');
+    assert.strictEqual(resSnippet.status, 'missing');
+  });
+
+  await test('Valid email: parseEmailsFromHtml extracts legitimate emails and ignores placeholders and assets', () => {
     const mockHtml = `
       <html>
         <body>
           <div class="contact">
             <h1>Contact Us</h1>
-            <p>For custom engineering and partnerships, reach our technical team at:</p>
+            <p>For custom engineering and partnerships, reach our team at:</p>
             <a href="mailto:partnerships@acmetechsolutions.com">partnerships@acmetechsolutions.com</a>
+            <p>Ignore placeholders: info@domain.com and logo@banner.png and style@theme.css</p>
             <p>Or call our office: (512) 555-0199</p>
           </div>
         </body>
       </html>
     `;
     const emails = parseEmailsFromHtml(mockHtml);
-    assert.ok(emails.length > 0, 'Must successfully extract emails');
+    assert.ok(emails.length === 1, 'Only genuine email must be extracted');
     assert.strictEqual(emails[0], 'partnerships@acmetechsolutions.com');
+  });
+
+  await test('Valid publicly sourced email: verifyEmailAddress approves legitimate email with active MX and credible source', async () => {
+    const credibleUrl = 'https://about.google/contact';
+    assert.strictEqual(isCredibleEmailSourceUrl(credibleUrl), true);
+
+    const res = await verifyEmailAddress('press@google.com', credibleUrl);
+    assert.strictEqual(res.eligibleForOutreach, true, 'Legitimate publicly sourced email must be eligible');
+    assert.strictEqual(res.status, 'publicly_sourced_and_mx_checked');
+    assert.strictEqual(res.sourceUrl, credibleUrl);
+    assert.ok(res.hasMxRecords, 'Domain google.com has active MX records');
   });
 
   // --------------------------------------------------------------------------
