@@ -12,6 +12,7 @@ const PUBLIC_PATHS = [
   '/api/production-health',
   '/api/approval/approve',
   '/api/approval/reject',
+  '/api/outreach/webhook',
 ];
 
 export function middleware(req: NextRequest) {
