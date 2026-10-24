@@ -178,13 +178,13 @@ export function generateHeuristicPitch(ctx: PitchContext): EmailPitch {
       `Idea for ${name} (${city})`,
       `${name} customer inquiries`,
     ];
-    body = `Hi guys,
+    body = `Hi ${name} team,
 
-I was looking up ${category} services in ${city} earlier today and saw ${name} on Google Maps.
+I came across ${name} earlier today while looking at established ${category} providers in ${city}.
 
-You have really solid customer feedback, but I noticed there isn't a mobile website or estimate link connected to your listing. Most clients searching on their phones in the evening prefer booking or requesting a quote online rather than calling, so competitors with online forms end up getting those calls.
+You clearly have great customer feedback and strong local trust, but I noticed a couple of friction points on mobile—specifically page load speed and how prospective clients request an estimate or booking. Most people searching on smartphones prefer requesting a quote online rather than calling, and bounce if they can't book or get a quick estimate in two clicks.
 
-I put together a clean 1-page preview concept for ${name} to show how an online estimate page would look on mobile.
+I put together a clean 1-page mobile redesign concept for ${name} with an instant estimate form to show how you can capture more booked inquiries from your traffic.
 
 Can I shoot the preview link over? No catch or sales pressure at all, just thought it might be useful for your team.
 

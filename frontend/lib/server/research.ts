@@ -58,31 +58,59 @@ async function checkDomainMx(domain: string): Promise<boolean> {
   }
 }
 
-async function fetchAndExtractEmailFromUrl(targetUrl: string): Promise<string | undefined> {
+export async function extractEmailFromWebsite(rawUrl: string): Promise<string | undefined> {
+  const cleanUrl = rawUrl.startsWith('http') ? rawUrl : `https://${rawUrl}`;
+  const candidates = [cleanUrl];
+
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 4000);
-    const resp = await fetch(targetUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      },
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-    if (!resp.ok) return undefined;
-    const html = await resp.text();
-    const matches = html.match(EMAIL_REGEX) || [];
-    for (const m of matches) {
-      const lower = m.toLowerCase();
-      const domain = lower.split('@')[1];
-      if (domain && !IGNORE_DOMAINS.includes(domain) && !lower.includes('shoaib') && !lower.includes('duckduckgo')) {
-        return lower;
+    const origin = new URL(cleanUrl).origin;
+    candidates.push(`${origin}/contact`);
+    candidates.push(`${origin}/contact-us`);
+    candidates.push(`${origin}/about`);
+  } catch {}
+
+  for (const target of candidates) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 4000);
+      const resp = await fetch(target, {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      if (!resp.ok) continue;
+
+      const html = await resp.text();
+      const matches = html.match(EMAIL_REGEX) || [];
+      for (const m of matches) {
+        const lower = m.toLowerCase();
+        const domain = lower.split('@')[1];
+        if (
+          domain &&
+          !IGNORE_DOMAINS.includes(domain) &&
+          !domain.endsWith('.png') &&
+          !domain.endsWith('.jpg') &&
+          !domain.endsWith('.jpeg') &&
+          !domain.endsWith('.webp') &&
+          !domain.endsWith('.svg') &&
+          !lower.includes('shoaib') &&
+          !lower.includes('duckduckgo')
+        ) {
+          const hasMx = await checkDomainMx(domain);
+          if (hasMx) {
+            return lower;
+          }
+        }
       }
+    } catch {
+      // try next path
     }
-  } catch {
-    // ignore
   }
+
   return undefined;
 }
 
@@ -195,7 +223,7 @@ async function searchPublicContactDetails(
           if (u.includes('yelp.com/biz/')) socialProfiles.yelp = u;
 
           if (!email && !u.includes('yelp.com') && !u.includes('yellowpages.com')) {
-            const scraped = await fetchAndExtractEmailFromUrl(u);
+            const scraped = await extractEmailFromWebsite(u);
             if (scraped) {
               email = scraped;
               sourceUrl = u;
@@ -243,6 +271,29 @@ export async function conductBusinessResearch(
   let publicEmail = initialEmail?.trim() || '';
   let emailSourceUrl: string | undefined = undefined;
 
+  // Step A: If initial email was provided by directory/Overpass, verify MX
+  if (publicEmail) {
+    const domain = publicEmail.split('@')[1] || '';
+    const hasMx = await checkDomainMx(domain);
+    if (!hasMx) {
+      publicEmail = '';
+    } else {
+      emailSourceUrl = 'Verified Directory Listing';
+    }
+  }
+
+  // Step B: If candidate has a website, crawl it directly for public email
+  const websiteToCheck = audit?.checkedUrl || (audit?.details?.redirectUrl);
+  if (!publicEmail && websiteToCheck) {
+    const websiteEmail = await extractEmailFromWebsite(websiteToCheck);
+    if (websiteEmail) {
+      publicEmail = websiteEmail;
+      emailSourceUrl = websiteToCheck;
+      sourceUrls.push(websiteToCheck);
+    }
+  }
+
+  // Step C: Fallback to public search engines
   const publicSearch = await searchPublicContactDetails(businessName, city);
   const socialProfiles = publicSearch.socialProfiles;
 

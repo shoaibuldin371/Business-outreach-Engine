@@ -82,6 +82,7 @@ export async function runDiscoveryCycle(
   const qualifiedLeads: BusinessLead[] = [];
   let discoveredCount = 0;
   let qualifiedCount = 0;
+  let dispatchedCount = 0;
   let missingEmailCount = 0;
   let errorCount = 0;
 
@@ -136,11 +137,6 @@ export async function runDiscoveryCycle(
           run.id
         );
 
-        // If active live website exists, skip candidate
-        if (audit.hasWebsite) {
-          continue;
-        }
-
         // Step B: Deep Presence Research & Public Contact Discovery
         const research = await conductBusinessResearch(
           name,
@@ -154,6 +150,9 @@ export async function runDiscoveryCycle(
         );
 
         // Step C: Generate Personalized Outreach Pitch
+        // If they have an existing website -> pitch mobile speed & instant quote booking upgrade
+        // If they have NO website -> pitch clean modern web presence concept
+        const pitchAngle = audit.hasWebsite ? 'mobile_speed' : 'free_mockup';
         const pitch = await generatePersonalizedPitch({
           businessName: name,
           category: candidate.category,
@@ -163,6 +162,7 @@ export async function runDiscoveryCycle(
           senderName: settings.sender_name,
           senderEmail: settings.sender_email,
           senderBusiness: settings.sender_business,
+          pitchAngle,
         });
 
         let validContactEmail = '';
@@ -263,6 +263,7 @@ export async function runDiscoveryCycle(
             // Full Autonomous Mode: Dispatch directly to prospect's verified email
             const sendResult = await sendPitchToProspect(savedLead, 'automated_discovery');
             if (sendResult.success) {
+              dispatchedCount++;
               await updateLead(savedLead.id, { status: 'sent' });
               await insertLog(
                 'success',
@@ -289,7 +290,7 @@ export async function runDiscoveryCycle(
     }
 
     const durationMs = Date.now() - startTime;
-    const summaryMsg = `Discovery cycle complete for ${city}. ${qualifiedCount} qualified businesses without website saved to Supabase (${missingEmailCount} awaiting contact discovery, ${Math.max(0, qualifiedCount - missingEmailCount)} dispatched for outreach).`;
+    const summaryMsg = `Autonomous cycle complete for ${city}. ${qualifiedCount} verified businesses saved to pipeline (${dispatchedCount} pitches dispatched to prospects, ${missingEmailCount} skipped due to missing email).`;
 
     await updateAutomationRun(run.id, {
       status: 'completed',
