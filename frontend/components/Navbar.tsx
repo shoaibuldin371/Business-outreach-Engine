@@ -38,8 +38,8 @@ export default function Navbar({ onRefresh, isRefreshing }: NavbarProps) {
         </div>
         <h1 className="text-xs sm:text-sm font-semibold text-slate-200 flex items-center gap-2 truncate">
           <span className="truncate">Outreach Control Center</span>
-          <span className="hidden sm:inline-block text-[10px] font-medium text-slate-400 bg-white/5 px-2 py-0.5 rounded-full border border-white/5 shrink-0">
-            Auto-Sync 3h
+          <span className="hidden sm:inline-block text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 shrink-0">
+            24/7 Cloud Autopilot
           </span>
         </h1>
       </div>
@@ -68,7 +68,7 @@ export default function Navbar({ onRefresh, isRefreshing }: NavbarProps) {
 
         <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] sm:text-xs font-medium">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
-          <span>Scheduler Online</span>
+          <span>Twice Daily Active</span>
         </div>
 
         {/* RBAC Admin Indicator & Logout */}

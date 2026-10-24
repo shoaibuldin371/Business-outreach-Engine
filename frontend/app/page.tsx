@@ -136,6 +136,7 @@ export default function DashboardPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [activeFilter, setActiveFilter] = useState<string>('active');
+  const [dashboardTab, setDashboardTab] = useState<'leads' | 'telemetry' | 'deliverability' | 'database'>('leads');
   
   // Dashboard multi-criteria filter state
   const [selectedService, setSelectedService] = useState<string>('all');
@@ -224,162 +225,105 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6 md:space-y-8 max-w-7xl mx-auto w-full">
-      {/* Professional Positioning Banner & Discovery Controller */}
-      <div className="bg-gradient-to-br from-[#0c1224] via-[#090d1a] to-[#060812] p-5 sm:p-7 rounded-3xl border border-indigo-500/25 shadow-2xl relative overflow-hidden space-y-6">
-        <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
-          {/* Left: Professional Positioning & 7 Core Technical Services */}
-          <div className="space-y-4 max-w-2xl">
+      {/* Sleek Executive Hero Banner & Quick Discovery Action Bar */}
+      <div className="bg-gradient-to-br from-[#0c1224] via-[#090d1a] to-[#060812] p-5 sm:p-7 rounded-3xl border border-indigo-500/20 shadow-2xl relative overflow-hidden space-y-6">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          {/* Left: Professional Positioning */}
+          <div className="space-y-3 max-w-2xl">
             <div className="flex items-center gap-2 text-xs font-bold text-emerald-400 uppercase tracking-wider">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span>Autonomous Technical Client Acquisition Engine • All 50 US States</span>
+              <span>24/7 Cloud Autopilot Active • All 50 US States</span>
             </div>
             
             <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-white tracking-tight">
-              AI Developer & Automation Architect Pipeline
+              AI Developer & Automation Client Acquisition
             </h1>
             
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              Targeting US businesses across <span className="text-white font-semibold">all 50 states</span> and <span className="text-white font-semibold">12 enterprise industries</span> with verifiable technical needs. The engine audits real operational bottlenecks, verifies DNS MX deliverability, generates tailored pitches, and queues them for your <span className="text-indigo-400 font-semibold">1-click Gmail HITL approval</span>.
+              Targeting US businesses with verifiable technical needs. The engine audits operational bottlenecks, verifies DNS MX deliverability, generates tailored pitches, and delivers them directly to prospects via Gmail SMTP.
             </p>
 
-            {/* 7 Technical Services Showcase Pills */}
-            <div className="pt-1">
-              <div className="text-[11px] font-semibold text-slate-400 mb-2 flex items-center gap-1.5">
-                <Zap className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Active Technical Service Offerings:</span>
-              </div>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {TECHNICAL_SERVICES_SHOWCASE.map((item, idx) => {
-                  const Icon = item.icon;
-                  const isActive = selectedService === item.cat;
-                  return (
-                    <button
-                      key={idx}
-                      onClick={() => setSelectedService(isActive ? 'all' : item.cat)}
-                      className={`inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-lg border transition-all ${
-                        isActive
-                          ? 'bg-indigo-600/30 border-indigo-500 text-white shadow-sm'
-                          : 'bg-white/5 border-white/5 text-slate-300 hover:border-indigo-500/30'
-                      }`}
-                    >
-                      <Icon className={`w-3 h-3 ${item.color}`} />
-                      <span>{item.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Nationwide Verification Pillars */}
-            <div className="pt-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
-                <div className="text-[10px] text-slate-400 font-medium">Nationwide Coverage</div>
-                <div className="text-xs font-bold text-white flex items-center gap-1 mt-0.5">
-                  <Globe2 className="w-3 h-3 text-cyan-400" /> All 50 US States + DC
-                </div>
-              </div>
-              <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
-                <div className="text-[10px] text-slate-400 font-medium">Cron Automation</div>
-                <div className="text-xs font-bold text-emerald-400 flex items-center gap-1 mt-0.5">
-                  <Clock className="w-3 h-3 text-emerald-400" /> Every 3 Hours
-                </div>
-              </div>
-              <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
-                <div className="text-[10px] text-slate-400 font-medium">Deliverability Standard</div>
-                <div className="text-xs font-bold text-sky-300 flex items-center gap-1 mt-0.5">
-                  <ShieldCheck className="w-3 h-3 text-sky-400" /> DNS MX Deliverable
-                </div>
-              </div>
-              <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
-                <div className="text-[10px] text-slate-400 font-medium">Safety Workflow</div>
-                <div className="text-xs font-bold text-indigo-300 flex items-center gap-1 mt-0.5">
-                  <Send className="w-3 h-3 text-indigo-400" /> 1-Click HITL Review
-                </div>
-              </div>
+            {/* Technical Service Tags */}
+            <div className="flex items-center gap-1.5 flex-wrap pt-1">
+              {TECHNICAL_SERVICES_SHOWCASE.map((item, idx) => {
+                const Icon = item.icon;
+                const isActive = selectedService === item.cat;
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      setSelectedService(isActive ? 'all' : item.cat);
+                      setDashboardTab('leads');
+                    }}
+                    className={`inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-lg border transition-all ${
+                      isActive
+                        ? 'bg-indigo-600/30 border-indigo-500 text-white shadow-sm'
+                        : 'bg-white/5 border-white/5 text-slate-300 hover:border-indigo-500/30'
+                    }`}
+                  >
+                    <Icon className={`w-3 h-3 ${item.color}`} />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          {/* Right: Targeted Discovery Controller (Run Nationwide or by Service/State) */}
-          <div className="p-5 rounded-2xl bg-slate-900/90 border border-indigo-500/25 flex flex-col gap-3.5 shadow-2xl shrink-0 w-full lg:w-88">
+          {/* Right: Compact Instant Discovery Controller */}
+          <div className="p-4 sm:p-5 rounded-2xl bg-slate-900/80 border border-white/10 flex flex-col gap-3 shadow-xl shrink-0 w-full lg:w-80">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-white flex items-center gap-1.5">
                 <Sparkles className="w-4 h-4 text-indigo-400" />
                 Targeted US Discovery
               </span>
               <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                ● Ready to Scan
+                ● 24/7 Autopilot
               </span>
             </div>
 
-            <p className="text-[11px] text-slate-400 leading-normal">
-              Select specific filters or leave as &ldquo;All&rdquo; for autonomous rotation across US states and technical categories.
-            </p>
-
-            <div className="space-y-2 text-xs">
+            <div className="grid grid-cols-2 gap-2 text-xs">
               <div>
                 <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-1">
-                  Target Service
+                  Service
                 </label>
                 <select
                   value={triggerService}
                   onChange={(e) => setTriggerService(e.target.value)}
-                  className="w-full px-2.5 py-1.5 rounded-lg bg-slate-800 border border-white/10 text-slate-200 text-xs focus:outline-none focus:border-indigo-500"
+                  className="w-full px-2 py-1.5 rounded-lg bg-slate-800 border border-white/10 text-slate-200 text-xs focus:outline-none focus:border-indigo-500"
                 >
-                  <option value="all">⚡ All Technical Services (Auto-Rotate)</option>
+                  <option value="all">⚡ All Services</option>
                   {SERVICE_CATEGORIES_LIST.filter(c => c.id !== 'all').map(c => (
                     <option key={c.id} value={c.id}>{c.icon} {c.label}</option>
                   ))}
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-1">
-                    US State
-                  </label>
-                  <select
-                    value={triggerState}
-                    onChange={(e) => setTriggerState(e.target.value)}
-                    className="w-full px-2 py-1.5 rounded-lg bg-slate-800 border border-white/10 text-slate-200 text-xs focus:outline-none focus:border-indigo-500"
-                  >
-                    <option value="all">🇺🇸 All 50 States</option>
-                    {US_50_STATES.map(s => (
-                      <option key={s.code} value={s.code}>{s.code} - {s.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-1">
-                    Demand Signal
-                  </label>
-                  <select
-                    value={triggerSignal}
-                    onChange={(e) => setTriggerSignal(e.target.value)}
-                    className="w-full px-2 py-1.5 rounded-lg bg-slate-800 border border-white/10 text-slate-200 text-xs focus:outline-none focus:border-indigo-500"
-                  >
-                    <option value="all">All Signals</option>
-                    <option value="explicit_demand">⚡ Explicit Demand</option>
-                    <option value="evidence_backed">🔍 Evidence-Backed</option>
-                    <option value="website_opportunity">🌐 Website Opp</option>
-                  </select>
-                </div>
+              <div>
+                <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-1">
+                  US State
+                </label>
+                <select
+                  value={triggerState}
+                  onChange={(e) => setTriggerState(e.target.value)}
+                  className="w-full px-2 py-1.5 rounded-lg bg-slate-800 border border-white/10 text-slate-200 text-xs focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="all">🇺🇸 All States</option>
+                  {US_50_STATES.map(s => (
+                    <option key={s.code} value={s.code}>{s.code} - {s.name}</option>
+                  ))}
+                </select>
               </div>
             </div>
 
-            {/* Big Instant 1-Click Run Button */}
+            {/* Instant Run Button */}
             <button
               onClick={() => handleTriggerDiscovery()}
               disabled={discovering}
-              className="w-full mt-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 shadow-xl shadow-indigo-500/30 transition-all disabled:opacity-50 active:scale-[0.99]"
+              className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 shadow-lg shadow-indigo-500/25 transition-all disabled:opacity-50 active:scale-[0.99]"
             >
-              <Sparkles className={`w-4 h-4 ${discovering ? 'animate-spin' : ''}`} />
-              <span>{discovering ? 'Auditing US Opportunities...' : '⚡ Run US Discovery Cycle Now'}</span>
+              <Sparkles className={`w-3.5 h-3.5 ${discovering ? 'animate-spin' : ''}`} />
+              <span>{discovering ? 'Auditing US Businesses...' : '⚡ Run Discovery Scan Now'}</span>
             </button>
-
-            <div className="text-[10px] text-center text-slate-400">
-              Zero guessing • Only stores verified MX deliverable public emails
-            </div>
           </div>
         </div>
       </div>
@@ -395,87 +339,121 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Real Production System Health Section (Deployment, Scheduler, Discovery, Gmail Sending, Replies) */}
-      <ProductionHealthSection />
-
-      {/* Database Engine & Central Store Settings */}
-      <DatabaseSettingCard initialTelemetry={stats?.database} />
-
-      {/* Deliverability & Sender Reputation Guard */}
-      <DeliverabilityCard />
-
-      {/* KPI Stats Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-        <div className="p-4 sm:p-5 rounded-2xl bg-[#0e1322] border border-white/5 space-y-1">
-          <span className="text-xs font-medium text-slate-400">Total Audited</span>
-          <div className="text-xl sm:text-2xl font-bold text-white">{stats?.total_leads || 0}</div>
-          <div className="text-[10px] sm:text-[11px] text-slate-400">Stored in Supabase</div>
-        </div>
-
-        <div className="p-4 sm:p-5 rounded-2xl bg-[#0e1322] border border-indigo-500/30 space-y-1 bg-indigo-500/[0.04]">
-          <span className="text-xs font-medium text-indigo-400 flex items-center gap-1">
-            <Layers className="w-3.5 h-3.5 shrink-0" />
-            <span>Active Funnel</span>
+      {/* KPI Stats Ribbon (4 High-Impact Metrics) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="p-4 rounded-2xl bg-[#0c101d] border border-white/5 space-y-1">
+          <span className="text-[11px] font-medium text-slate-400 flex items-center gap-1.5">
+            <Building2 className="w-3.5 h-3.5 text-slate-400" /> Total Qualified
           </span>
-          <div className="text-xl sm:text-2xl font-bold text-indigo-300">
-            {stats?.active_pipelines_count ?? ((stats?.pending_approval || 0) + (stats?.missing_contact_count || 0))}
-          </div>
-          <div className="text-[10px] sm:text-[11px] text-slate-400">Active prospects</div>
+          <div className="text-xl sm:text-2xl font-bold text-white">{stats?.total_leads || leads.length || 0}</div>
+          <div className="text-[10px] text-slate-500">Verified US Businesses</div>
         </div>
 
-        <div className="p-4 sm:p-5 rounded-2xl bg-[#0e1322] border border-amber-500/20 space-y-1">
-          <span className="text-xs font-medium text-amber-400 flex items-center gap-1">
-            <Clock className="w-3.5 h-3.5 shrink-0" />
-            <span>Drafts Pending</span>
+        <div className="p-4 rounded-2xl bg-[#0c101d] border border-emerald-500/20 space-y-1 bg-emerald-500/[0.02]">
+          <span className="text-[11px] font-medium text-emerald-400 flex items-center gap-1.5">
+            <Send className="w-3.5 h-3.5 text-emerald-400" /> Dispatched via Gmail
           </span>
-          <div className="text-xl sm:text-2xl font-bold text-amber-300">{stats?.pending_approval || 0}</div>
-          <div className="text-[10px] sm:text-[11px] text-slate-400">1-click pitch review</div>
-        </div>
-
-        <div className="p-4 sm:p-5 rounded-2xl bg-[#0e1322] border border-sky-500/20 space-y-1">
-          <span className="text-xs font-medium text-sky-400 flex items-center gap-1">
-            <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-            <span>Target Emails</span>
-          </span>
-          <div className="text-xl sm:text-2xl font-bold text-sky-300">{stats?.total_leads || 0}</div>
-          <div className="text-[10px] sm:text-[11px] text-slate-400">100% MX verified</div>
-        </div>
-
-        <Link
-          href="/completed"
-          className="p-4 sm:p-5 rounded-2xl bg-[#0e1322] border border-emerald-500/20 space-y-1 block hover:bg-emerald-500/[0.04] transition-all group"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-emerald-400 flex items-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-              <span>Accepted</span>
-            </span>
-            <span className="text-[10px] font-semibold text-emerald-400 opacity-80 group-hover:opacity-100 flex items-center gap-0.5">
-              View ➔
-            </span>
-          </div>
           <div className="text-xl sm:text-2xl font-bold text-emerald-300">
             {stats?.accepted_by_provider_count ?? stats?.sent_count ?? 0}
           </div>
-          <div className="text-[10px] sm:text-[11px] text-slate-400">Accepted by Gmail</div>
-        </Link>
+          <div className="text-[10px] text-slate-500">250 OK Provider Accepted</div>
+        </div>
 
-        <div className="p-4 sm:p-5 rounded-2xl bg-[#0e1322] border border-purple-500/20 space-y-1 bg-purple-500/[0.03]">
-          <span className="text-xs font-medium text-purple-400 flex items-center gap-1">
-            <Sparkles className="w-3.5 h-3.5 shrink-0" />
-            <span>Reply Rate</span>
+        <div className="p-4 rounded-2xl bg-[#0c101d] border border-sky-500/20 space-y-1 bg-sky-500/[0.02]">
+          <span className="text-[11px] font-medium text-sky-400 flex items-center gap-1.5">
+            <ShieldCheck className="w-3.5 h-3.5 text-sky-400" /> Deliverability
           </span>
-          <div className="text-xl sm:text-2xl font-bold text-purple-300">
-            {stats?.reply_rate_percentage ?? 0.0}%
-          </div>
-          <div className="text-[10px] sm:text-[11px] text-slate-400">
-            {stats?.replies_count || 0} replies ({stats?.positive_replies_count || 0} positive)
-          </div>
+          <div className="text-xl sm:text-2xl font-bold text-sky-300">100% MX Verified</div>
+          <div className="text-[10px] text-slate-500">Zero Bounce Guarantee</div>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-[#0c101d] border border-indigo-500/20 space-y-1 bg-indigo-500/[0.02]">
+          <span className="text-[11px] font-medium text-indigo-400 flex items-center gap-1.5">
+            <Clock className="w-3.5 h-3.5 text-indigo-400" /> Cloud Schedule
+          </span>
+          <div className="text-xl sm:text-2xl font-bold text-indigo-300">Twice Daily</div>
+          <div className="text-[10px] text-slate-500">08:00 & 20:00 UTC (Laptop Off)</div>
         </div>
       </div>
 
-      {/* Main Content Area */}
-      <div className="p-4 sm:p-6 rounded-2xl bg-[#0b0f1d] border border-white/5 space-y-5">
+      {/* Main Interactive View Tabs */}
+      <div className="flex items-center gap-2 border-b border-white/5 pb-2 overflow-x-auto">
+        <button
+          onClick={() => setDashboardTab('leads')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
+            dashboardTab === 'leads'
+              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/25'
+              : 'text-slate-400 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <Target className="w-4 h-4" />
+          <span>All Leads & Pitches</span>
+          <span className="text-[11px] px-1.5 py-0.2 rounded-full bg-white/20 text-white">
+            {filteredLeads.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setDashboardTab('telemetry')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
+            dashboardTab === 'telemetry'
+              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/25'
+              : 'text-slate-400 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <Zap className="w-4 h-4 text-emerald-400" />
+          <span>Production Health (5 Domains)</span>
+        </button>
+
+        <button
+          onClick={() => setDashboardTab('deliverability')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
+            dashboardTab === 'deliverability'
+              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/25'
+              : 'text-slate-400 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <ShieldCheck className="w-4 h-4 text-sky-400" />
+          <span>Deliverability Guard</span>
+        </button>
+
+        <button
+          onClick={() => setDashboardTab('database')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
+            dashboardTab === 'database'
+              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/25'
+              : 'text-slate-400 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <Layers className="w-4 h-4 text-violet-400" />
+          <span>Database Schema</span>
+        </button>
+      </div>
+
+      {/* Conditional View: Production Health Telemetry */}
+      {dashboardTab === 'telemetry' && (
+        <div className="space-y-4 animate-fadeIn">
+          <ProductionHealthSection />
+        </div>
+      )}
+
+      {/* Conditional View: Deliverability & Sender Reputation Guard */}
+      {dashboardTab === 'deliverability' && (
+        <div className="space-y-4 animate-fadeIn">
+          <DeliverabilityCard />
+        </div>
+      )}
+
+      {/* Conditional View: Database Explorer */}
+      {dashboardTab === 'database' && (
+        <div className="space-y-4 animate-fadeIn">
+          <DatabaseSettingCard initialTelemetry={stats?.database} />
+        </div>
+      )}
+
+      {/* Conditional View: Primary Leads & Outreach Funnel */}
+      {dashboardTab === 'leads' && (
+        <div className="p-4 sm:p-6 rounded-2xl bg-[#0b0f1d] border border-white/5 space-y-5 animate-fadeIn">
         {/* Top Status Tabs */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/5 pb-4">
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full">
@@ -847,6 +825,7 @@ export default function DashboardPage() {
           </>
         )}
       </div>
+      )}
 
       {/* Review & Approval Modal */}
       <LeadModal

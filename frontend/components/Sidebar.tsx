@@ -43,11 +43,11 @@ export default function Sidebar() {
               <div>
                 <div className="font-bold text-base text-white tracking-tight flex items-center gap-1.5">
                   Outreach Engine
-                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
-                    MVP
+                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                    LIVE
                   </span>
                 </div>
-                <div className="text-xs text-slate-400">Autonomous 3H Agent</div>
+                <div className="text-xs text-slate-400">AI & Automation Engine</div>
               </div>
             </Link>
           </div>
@@ -81,7 +81,7 @@ export default function Sidebar() {
             <span>Engine Status</span>
             <span className="flex items-center gap-1.5 text-emerald-400">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              3h Active
+              24/7 Autopilot
             </span>
           </div>
 
@@ -93,12 +93,8 @@ export default function Sidebar() {
             <div className="flex items-center justify-between">
               <span className="text-slate-400">Deployment:</span>
               <span className="text-emerald-400 font-medium flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Vercel (All-in-One)
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Vercel Cloud
               </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-slate-400">Backend & API:</span>
-              <span className="text-slate-200 font-medium">Next.js Serverless</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-slate-400">Database:</span>
@@ -107,14 +103,14 @@ export default function Sidebar() {
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-slate-400">HITL Verification:</span>
-              <span className="text-slate-200 font-medium">Gmail 1-Click</span>
+              <span className="text-slate-400">Email Gateway:</span>
+              <span className="text-slate-200 font-medium">Direct Auto-Send</span>
             </div>
           </div>
 
           <div className="pt-2 border-t border-white/5 text-[10px] text-slate-400 flex items-center justify-between">
-            <span>Discovery: Worldwide</span>
-            <span className="text-indigo-400 font-semibold">5 leads/cycle</span>
+            <span>US 50 States</span>
+            <span className="text-indigo-400 font-semibold">7 Tech Services</span>
           </div>
         </div>
       </aside>
