@@ -217,37 +217,41 @@ export function generateHeuristicPitch(ctx: PitchContext): EmailPitch {
   let body = '';
 
   if (angle === 'ai_automation') {
-    subject = `${name} — AI & Workflow Automation question`;
+    subject = `quick question regarding ${name} workflows`;
     alternativeSubjects = [
-      `Automating workflows for ${name}`,
-      `Quick question for ${name} team`,
-      `Idea regarding ${name} operational automation`,
+      `automation question for ${name}`,
+      `${name} x AI automation pipelines`,
+      `workflow automation idea for ${name}`,
     ];
     body = `Hi ${name} team,
 
-I came across ${name} while looking at established ${category} providers in ${city}.
+I was checking out what your team has built at ${name} in ${city} — really solid work.
 
-As an AI Developer & Automation Architect specializing in LLMs, Python, and Cloud integrations (Huawei Certified Cloud Developer), I help teams eliminate repetitive manual admin work by deploying custom AI agents and end-to-end automated pipelines (lead enrichment, client intake, and data processing).
+Quick question: does your team currently build custom AI agents or backend Python automations in-house, or do you ever bring in outside specialists for client projects and internal workflows?
 
-Given your active operations in ${city}, I put together a quick workflow automation blueprint showing where AI agents can save your team 10-15+ hours weekly.
+I am an AI Developer & Automation Architect (Huawei Certified Cloud Developer, Python/LLMs). I build custom workflows (client onboarding, CRM/Zapier/n8n/Make integrations, lead enrichment pipelines, and custom AI agents) that eliminate 10-15+ hours of repetitive manual admin every week.
 
-Can I shoot the outline over? No catch or sales pressure at all, just thought it might be useful for your team.
+I mapped out a quick 2-minute workflow breakdown showing a couple of areas where automated AI agents could plug right into your stack.
+
+Would you be open to me sharing the outline? (No sales pitch or expectation at all, just thought it'd be genuinely helpful for your team.)
 
 ${sig}`;
   } else if (angle === 'data_science_training') {
-    subject = `${name} — Data Science & AI Curriculum / Training`;
+    subject = `curriculum / AI & Python training for ${name}`;
     alternativeSubjects = [
       `Data Science & LLM Training for ${name}`,
-      `Quick question regarding ${name} technical training`,
-      `AI & Python curriculum collaboration for ${name}`,
+      `technical training collaboration for ${name}`,
+      `${name} — guest instructor for AI & Python`,
     ];
     body = `Hi ${name} team,
 
-I came across ${name} while looking at leading training and educational institutions in ${city}.
+I came across ${name} while looking at leading tech and data academies in ${city}.
 
-I am a Data Science Trainer and Huawei Certified Cloud Developer specializing in Python, Large Language Models (LLMs), and Applied AI. I help bootcamps, institutes, and corporate teams deliver hands-on, industry-ready training programs in Data Science, Machine Learning, and Cloud Architecture.
+I am a Data Science Trainer and Huawei Certified Cloud Developer specializing in Python, Large Language Models (LLMs), and practical Machine Learning. I help bootcamps and corporate teams deliver hands-on, job-ready training modules for students and technical professionals.
 
-Would your team be open to exploring guest training or collaborating on practical AI/Data Science tracks for your upcoming cohorts? I would be glad to share our curriculum syllabus and past project outlines.
+Are you currently looking for guest trainers, curriculum mentors, or practical lab instructors for your upcoming Python, Data Science, or AI cohorts?
+
+I'd be glad to share our syllabus and past cohort project outlines if you're open to a quick look.
 
 ${sig}`;
   } else if (angle === 'mobile_speed') {

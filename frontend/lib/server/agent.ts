@@ -149,9 +149,9 @@ export async function runDiscoveryCycle(
           candidate.review_count
         );
 
-        // Step C: Generate Personalized Outreach Pitch
+        // Step C: Generate Personalized Outreach Pitch matching User's Core Skills
         const catLower = (candidate.category || '').toLowerCase();
-        let pitchAngle: 'ai_automation' | 'data_science_training' | 'mobile_speed' | 'free_mockup' = 'free_mockup';
+        let pitchAngle: 'ai_automation' | 'data_science_training' | 'mobile_speed' | 'free_mockup' = 'ai_automation';
 
         if (
           catLower.includes('training') ||
@@ -159,25 +159,22 @@ export async function runDiscoveryCycle(
           catLower.includes('academy') ||
           catLower.includes('institute') ||
           catLower.includes('college') ||
-          catLower.includes('education')
+          catLower.includes('education') ||
+          catLower.includes('course')
         ) {
           pitchAngle = 'data_science_training';
         } else if (
-          catLower.includes('ai') ||
-          catLower.includes('software') ||
-          catLower.includes('saas') ||
-          catLower.includes('tech') ||
-          catLower.includes('automation') ||
-          catLower.includes('agency') ||
-          catLower.includes('consult') ||
-          catLower.includes('logistics') ||
-          catLower.includes('fintech')
+          catLower.includes('clinic') ||
+          catLower.includes('dentist') ||
+          catLower.includes('roof') ||
+          catLower.includes('plumb') ||
+          catLower.includes('hvac') ||
+          catLower.includes('contractor')
         ) {
-          pitchAngle = 'ai_automation';
-        } else if (audit.hasWebsite) {
-          pitchAngle = 'mobile_speed';
+          pitchAngle = audit.hasWebsite ? 'mobile_speed' : 'free_mockup';
         } else {
-          pitchAngle = 'free_mockup';
+          // Default for all tech, SaaS, agency, automation, e-commerce & digital businesses
+          pitchAngle = 'ai_automation';
         }
 
         const pitch = await generatePersonalizedPitch({
