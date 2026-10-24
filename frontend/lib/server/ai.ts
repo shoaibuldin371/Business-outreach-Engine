@@ -143,8 +143,11 @@ Return strictly JSON: {"subject": "...", "body": "...", "alternativeSubjects": [
  * 3. Intelligent Heuristic Generator with 3 Verified Evidence-Backed Angles
  */
 export function generateHeuristicPitch(ctx: PitchContext): EmailPitch {
-  const name = ctx.businessName.trim();
-  const category = (ctx.category || 'local services').toLowerCase();
+  let rawCategory = (ctx.category || 'local services').toLowerCase().replace(/_/g, ' ');
+  if (rawCategory === 'business' || rawCategory === 'local business' || !rawCategory.trim()) {
+    rawCategory = 'local services';
+  }
+  const category = rawCategory;
   const city = ctx.city.split(',')[0].trim();
   const senderName = ctx.senderName || 'Muhammad Shoaib';
   const senderBusiness = ctx.senderBusiness || 'Web Development & Client Acquisition';

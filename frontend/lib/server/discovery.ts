@@ -415,14 +415,34 @@ out tags ${Math.min(count * 2, 25)};`;
           continue;
         }
 
-        const category = tags.shop || tags.craft || tags.amenity || tags.office || 'local services';
+        const amenity = (tags.amenity || '').toLowerCase();
+        if (
+          amenity === 'place_of_worship' ||
+          amenity === 'grave_yard' ||
+          amenity === 'bench' ||
+          amenity === 'waste_basket' ||
+          amenity === 'post_box' ||
+          amenity === 'toilets'
+        ) {
+          continue;
+        }
+
+        const category =
+          tags.craft ||
+          tags.shop ||
+          tags.office ||
+          (tags.amenity && !['school', 'college', 'university', 'kindergarten'].includes(tags.amenity) ? tags.amenity : '') ||
+          tags.healthcare ||
+          tags.tourism ||
+          tags.leisure ||
+          'local services';
         const phone = tags['contact:phone'] || tags.phone || '';
         const website = tags['contact:website'] || tags.website || '';
         const address = [tags['addr:housenumber'], tags['addr:street'], tags['addr:suburb'], hub.city].filter(Boolean).join(', ');
 
         candidates.push({
           business_name: name,
-          category,
+          category: category.replace(/_/g, ' '),
           city: hub.city,
           country: hub.country,
           address: address || hub.city,
