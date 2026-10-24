@@ -262,6 +262,30 @@ export async function discoverBraveSearch(
   }
 }
 
+export function cleanSearchKeyword(category: string): string {
+  const lower = category.toLowerCase().trim();
+  if (lower.includes('dentist') || lower.includes('dental') || lower.includes('orthodont')) return 'dentist';
+  if (lower.includes('clinic') || lower.includes('spa') || lower.includes('dermatolog') || lower.includes('aesthetic') || lower.includes('wellness') || lower.includes('chiropractic')) return 'clinic';
+  if (lower.includes('roof')) return 'roofing';
+  if (lower.includes('plumb')) return 'plumber';
+  if (lower.includes('hvac') || lower.includes('air conditioning') || lower.includes('refrigeration')) return 'hvac';
+  if (lower.includes('law') || lower.includes('attorney') || lower.includes('legal')) return 'lawyer';
+  if (lower.includes('account') || lower.includes('cpa') || lower.includes('tax')) return 'accountant';
+  if (lower.includes('auto') || lower.includes('repair') || lower.includes('detailing') || lower.includes('mechanic')) return 'car repair';
+  if (lower.includes('builder') || lower.includes('contractor') || lower.includes('remodel') || lower.includes('construction') || lower.includes('architect') || lower.includes('hardscaping') || lower.includes('flooring')) return 'contractor';
+  if (lower.includes('veterinary') || lower.includes('vet ') || lower.includes('animal')) return 'veterinary';
+  if (lower.includes('pool')) return 'swimming pool';
+  if (lower.includes('solar') || lower.includes('clean power')) return 'solar energy';
+  if (lower.includes('electric')) return 'electrician';
+  if (lower.includes('real estate') || lower.includes('broker') || lower.includes('property')) return 'estate agent';
+  if (lower.includes('restaurant') || lower.includes('dining') || lower.includes('catering')) return 'restaurant';
+  if (lower.includes('cafe') || lower.includes('coffee')) return 'cafe';
+  if (lower.includes('bakery') || lower.includes('bake')) return 'bakery';
+  if (lower.includes('hotel') || lower.includes('resort')) return 'hotel';
+  if (lower.includes('gym') || lower.includes('fitness')) return 'gym';
+  return 'business';
+}
+
 /**
  * 3. Discover 100% REAL local businesses via OpenStreetMap Nominatim Public Directory
  */
@@ -271,21 +295,7 @@ export async function discoverNominatim(
   count = 5
 ): Promise<DiscoveredCandidate[]> {
   const cityName = city.split(',')[0].trim();
-  let searchKeyword = category.toLowerCase().trim();
-  if (searchKeyword.includes('dentist')) searchKeyword = 'dentist';
-  else if (searchKeyword.includes('roof')) searchKeyword = 'roofing';
-  else if (searchKeyword.includes('plumb')) searchKeyword = 'plumber';
-  else if (searchKeyword.includes('hvac') || searchKeyword.includes('air conditioning')) searchKeyword = 'hvac';
-  else if (searchKeyword.includes('aesthetic') || searchKeyword.includes('spa') || searchKeyword.includes('dermatology') || searchKeyword.includes('clinic')) searchKeyword = 'clinic';
-  else if (searchKeyword.includes('law') || searchKeyword.includes('attorney')) searchKeyword = 'lawyer';
-  else if (searchKeyword.includes('account') || searchKeyword.includes('cpa')) searchKeyword = 'accountant';
-  else if (searchKeyword.includes('detailing') || searchKeyword.includes('auto')) searchKeyword = 'car repair';
-  else if (searchKeyword.includes('builder') || searchKeyword.includes('remodeling') || searchKeyword.includes('architect')) searchKeyword = 'architect';
-  else if (searchKeyword.includes('veterinary')) searchKeyword = 'veterinary';
-  else if (searchKeyword.includes('pool')) searchKeyword = 'swimming pool';
-  else if (searchKeyword.includes('solar')) searchKeyword = 'solar energy';
-  else if (searchKeyword.includes('electric')) searchKeyword = 'electrician';
-
+  const searchKeyword = cleanSearchKeyword(category);
   const query = `${searchKeyword} ${cityName}`;
   const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=${Math.min(count * 3, 20)}&addressdetails=1&extratags=1`;
 
@@ -358,14 +368,10 @@ export async function discoverOverpassBusinesses(
 
   const query = `[out:json][timeout:8];
 (
-  node["contact:email"]["name"]["shop"](around:25000, ${hub.lat}, ${hub.lon});
-  node["contact:email"]["name"]["craft"](around:25000, ${hub.lat}, ${hub.lon});
-  node["contact:email"]["name"]["amenity"](around:25000, ${hub.lat}, ${hub.lon});
-  node["contact:email"]["name"]["office"](around:25000, ${hub.lat}, ${hub.lon});
-  way["contact:email"]["name"]["shop"](around:25000, ${hub.lat}, ${hub.lon});
-  way["contact:email"]["name"]["craft"](around:25000, ${hub.lat}, ${hub.lon});
-  way["contact:email"]["name"]["amenity"](around:25000, ${hub.lat}, ${hub.lon});
-  way["contact:email"]["name"]["office"](around:25000, ${hub.lat}, ${hub.lon});
+  node["contact:email"]["name"](around:35000, ${hub.lat}, ${hub.lon});
+  node["email"]["name"](around:35000, ${hub.lat}, ${hub.lon});
+  way["contact:email"]["name"](around:35000, ${hub.lat}, ${hub.lon});
+  way["email"]["name"](around:35000, ${hub.lat}, ${hub.lon});
 );
 out tags ${Math.min(count * 2, 25)};`;
 
