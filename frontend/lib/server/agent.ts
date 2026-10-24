@@ -150,9 +150,36 @@ export async function runDiscoveryCycle(
         );
 
         // Step C: Generate Personalized Outreach Pitch
-        // If they have an existing website -> pitch mobile speed & instant quote booking upgrade
-        // If they have NO website -> pitch clean modern web presence concept
-        const pitchAngle = audit.hasWebsite ? 'mobile_speed' : 'free_mockup';
+        const catLower = (candidate.category || '').toLowerCase();
+        let pitchAngle: 'ai_automation' | 'data_science_training' | 'mobile_speed' | 'free_mockup' = 'free_mockup';
+
+        if (
+          catLower.includes('training') ||
+          catLower.includes('bootcamp') ||
+          catLower.includes('academy') ||
+          catLower.includes('institute') ||
+          catLower.includes('college') ||
+          catLower.includes('education')
+        ) {
+          pitchAngle = 'data_science_training';
+        } else if (
+          catLower.includes('ai') ||
+          catLower.includes('software') ||
+          catLower.includes('saas') ||
+          catLower.includes('tech') ||
+          catLower.includes('automation') ||
+          catLower.includes('agency') ||
+          catLower.includes('consult') ||
+          catLower.includes('logistics') ||
+          catLower.includes('fintech')
+        ) {
+          pitchAngle = 'ai_automation';
+        } else if (audit.hasWebsite) {
+          pitchAngle = 'mobile_speed';
+        } else {
+          pitchAngle = 'free_mockup';
+        }
+
         const pitch = await generatePersonalizedPitch({
           businessName: name,
           category: candidate.category,

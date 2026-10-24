@@ -72,6 +72,22 @@ export const WORLDWIDE_HUBS: WorldwideHub[] = [
 ];
 
 export const WORLDWIDE_CATEGORIES = [
+  // High-Growth AI, Automation, Cloud & Tech Companies
+  'ai startups & software companies',
+  'saas & cloud software companies',
+  'process automation & bpa consultancies',
+  'digital marketing & lead generation agencies',
+  'it consulting & cloud solutions providers',
+  'e-commerce brands & amazon aggregators',
+  'fintech & algorithmic trading firms',
+  'logistics & fleet tracking companies',
+
+  // Data Science Bootcamps & Corporate Training Academies
+  'data science academies & coding bootcamps',
+  'ai & technology training institutes',
+  'corporate professional upskilling academies',
+  'executive business & tech education institutes',
+
   // High-Growth Aesthetics & Specialized Healthcare
   'aesthetic clinics & med spas',
   'cosmetic dentistry & orthodontics',
@@ -264,6 +280,10 @@ export async function discoverBraveSearch(
 
 export function cleanSearchKeyword(category: string): string {
   const lower = category.toLowerCase().trim();
+  if (lower.includes('software') || lower.includes('saas') || lower.includes('ai ') || lower.includes('ai startup')) return 'software';
+  if (lower.includes('bootcamp') || lower.includes('academy') || lower.includes('training') || lower.includes('institute') || lower.includes('edtech')) return 'college';
+  if (lower.includes('automation') || lower.includes('consult') || lower.includes('agency') || lower.includes('solutions')) return 'office';
+  if (lower.includes('logistics') || lower.includes('fleet')) return 'logistics';
   if (lower.includes('dentist') || lower.includes('dental') || lower.includes('orthodont')) return 'dentist';
   if (lower.includes('clinic') || lower.includes('spa') || lower.includes('dermatolog') || lower.includes('aesthetic') || lower.includes('wellness') || lower.includes('chiropractic')) return 'clinic';
   if (lower.includes('roof')) return 'roofing';

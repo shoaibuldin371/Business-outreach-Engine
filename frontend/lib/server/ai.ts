@@ -1,10 +1,17 @@
 import { DeepResearchResult } from './research';
 
+export type PitchAngle =
+  | 'local_search'
+  | 'mobile_speed'
+  | 'free_mockup'
+  | 'ai_automation'
+  | 'data_science_training';
+
 export interface EmailPitch {
   subject: string;
   body: string;
   modelUsed: string;
-  pitchAngle: 'local_search' | 'mobile_speed' | 'free_mockup';
+  pitchAngle: PitchAngle;
   alternativeSubjects: string[];
 }
 
@@ -17,8 +24,15 @@ export interface PitchContext {
   senderName?: string;
   senderEmail?: string;
   senderBusiness?: string;
-  pitchAngle?: 'local_search' | 'mobile_speed' | 'free_mockup' | 'auto';
+  pitchAngle?: PitchAngle | 'auto';
 }
+
+const DEFAULT_SIGNATURE = (name = 'Muhammad Shoaib', email = 'Mshoaibawan371@gmail.com') => `Best,
+
+${name}
+AI Developer & Automation Architect | Huawei Certified Cloud Developer
+LLMs & Python | Data Science Trainer
+${email}`;
 
 /**
  * 1. Generate pitch via Anthropic Claude API
@@ -27,28 +41,40 @@ async function generateWithAnthropic(
   apiKey: string,
   ctx: PitchContext
 ): Promise<EmailPitch | null> {
-  const chosenAngle = ctx.pitchAngle && ctx.pitchAngle !== 'auto' ? ctx.pitchAngle : 'local_search';
-  const prompt = `You are an executive B2B outreach specialist writing a cold email to a local business owner.
+  const chosenAngle = ctx.pitchAngle && ctx.pitchAngle !== 'auto' ? ctx.pitchAngle : 'ai_automation';
+  const prompt = `You are an elite B2B outreach specialist writing a cold email to a business leader.
 Business Name: ${ctx.businessName}
 Niche: ${ctx.category}
 Location: ${ctx.city}
 Angle: ${chosenAngle}
-Key Verified Research Observations:
+Key Research Observations:
 ${ctx.research.growth_signals.observations.join('\n')}
 
 Sender Profile:
 Name: ${ctx.senderName || 'Muhammad Shoaib'}
 Email: ${ctx.senderEmail || 'Mshoaibawan371@gmail.com'}
-Specialization: ${ctx.senderBusiness || 'Web Development & Client Acquisition'}
-Offer: ${ctx.offerService || 'Building a modern, high-converting website and online booking system'}
+Specialization: AI Developer & Automation Architect | Huawei Certified Cloud Developer | LLMs & Python | Data Science Trainer
+Offer: ${ctx.offerService || 'AI Automation, Custom LLM Workflows, Cloud Architecture & High-Converting Digital Infrastructure'}
 
 Strict Requirements:
-1. Mention the actual business name and at least one factual research observation (e.g. positive local reputation, active customer interest, lack of dedicated online booking).
-2. Explain specifically how an official, modern website will capture local search inquiries that currently go to competitors.
-3. Be concise (under 140 words), natural, and direct.
-4. NO fake flattery or generic clichés ("I hope this email finds you well", "In today's digital landscape").
-5. Include a clear, low-pressure call to action (e.g., offering a free 2-minute mockup or short chat).
-6. Provide output in JSON format: {"subject": "...", "body": "...", "alternativeSubjects": ["...", "..."]}`;
+1. Mention the actual business name and at least one factual research observation.
+2. If Angle is 'ai_automation': Highlight automating repetitive manual workflows (client intake, lead qualification, data pipelines) using custom AI agents, LLMs, and Python.
+3. If Angle is 'data_science_training': Highlight hands-on training/upskilling in Data Science, Machine Learning, Python, and Cloud Architecture for cohorts/teams.
+4. If Angle is 'mobile_speed': Highlight mobile conversion, instant estimate/quote booking, and speed optimization.
+5. If Angle is 'free_mockup' or 'local_search': Highlight building a clean digital presence and automated online client booking.
+6. Be concise (under 130 words), natural, polite, and direct.
+7. NO fake flattery or generic clichés ("I hope this email finds you well", "In today's fast-paced world").
+8. Include a clear, low-pressure permission-based call to action (offering to share a quick preview or outline).
+9. NEVER include any opt-out text or lines like "reply no thanks" or "if not interested reply no thanks".
+10. Sign off with:
+Best,
+
+Muhammad Shoaib
+AI Developer & Automation Architect | Huawei Certified Cloud Developer
+LLMs & Python | Data Science Trainer
+${ctx.senderEmail || 'Mshoaibawan371@gmail.com'}
+
+Provide output strictly in JSON format: {"subject": "...", "body": "...", "alternativeSubjects": ["...", "..."]}`;
 
   try {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
@@ -75,7 +101,7 @@ Strict Requirements:
           subject: parsed.subject,
           body: parsed.body,
           modelUsed: 'Anthropic Claude 3.5 Sonnet',
-          pitchAngle: chosenAngle as any,
+          pitchAngle: chosenAngle,
           alternativeSubjects: Array.isArray(parsed.alternativeSubjects) ? parsed.alternativeSubjects : [],
         };
       }
@@ -93,19 +119,21 @@ async function generateWithGemini(
   apiKey: string,
   ctx: PitchContext
 ): Promise<EmailPitch | null> {
-  const chosenAngle = ctx.pitchAngle && ctx.pitchAngle !== 'auto' ? ctx.pitchAngle : 'local_search';
-  const prompt = `Write a personalized, concise B2B email to a business owner:
+  const chosenAngle = ctx.pitchAngle && ctx.pitchAngle !== 'auto' ? ctx.pitchAngle : 'ai_automation';
+  const prompt = `Write a personalized, concise B2B email to a business leader:
 Business: ${ctx.businessName} (${ctx.category} in ${ctx.city})
 Verified observations: ${ctx.research.growth_signals.observations.join(', ')}
-Sender: ${ctx.senderName} (${ctx.senderEmail}), ${ctx.senderBusiness}
-Offer: ${ctx.offerService}
+Sender: ${ctx.senderName || 'Muhammad Shoaib'} (${ctx.senderEmail || 'Mshoaibawan371@gmail.com'})
+Title: AI Developer & Automation Architect | Huawei Certified Cloud Developer | LLMs & Python | Data Science Trainer
+Offer: ${ctx.offerService || 'AI Automation, Cloud Infrastructure & Digital Systems'}
 Angle: ${chosenAngle}
 
 Rules:
-- Mention business and real observation.
-- Explain how a dedicated website captures clients currently lost to competitors.
-- Keep under 140 words.
-- Low-pressure call to action. No generic filler.
+- Mention business name and a factual observation.
+- Under 130 words, direct and conversational.
+- Low-pressure permission-based call to action.
+- Do NOT include any opt-out line or "reply no thanks".
+- Sign off with sender's full professional title and email.
 Return strictly JSON: {"subject": "...", "body": "...", "alternativeSubjects": ["...", "..."]}`;
 
   try {
@@ -128,7 +156,7 @@ Return strictly JSON: {"subject": "...", "body": "...", "alternativeSubjects": [
           subject: parsed.subject,
           body: parsed.body,
           modelUsed: 'Google Gemini 1.5 Flash',
-          pitchAngle: chosenAngle as any,
+          pitchAngle: chosenAngle,
           alternativeSubjects: Array.isArray(parsed.alternativeSubjects) ? parsed.alternativeSubjects : [],
         };
       }
@@ -140,9 +168,10 @@ Return strictly JSON: {"subject": "...", "body": "...", "alternativeSubjects": [
 }
 
 /**
- * 3. Intelligent Heuristic Generator with 3 Verified Evidence-Backed Angles
+ * 3. Intelligent Heuristic Generator Backed by Professional AI & Engineering Profile
  */
 export function generateHeuristicPitch(ctx: PitchContext): EmailPitch {
+  const name = ctx.businessName.trim();
   let rawCategory = (ctx.category || 'local services').toLowerCase().replace(/_/g, ' ');
   if (rawCategory === 'business' || rawCategory === 'local business' || !rawCategory.trim()) {
     rawCategory = 'local services';
@@ -150,20 +179,33 @@ export function generateHeuristicPitch(ctx: PitchContext): EmailPitch {
   const category = rawCategory;
   const city = ctx.city.split(',')[0].trim();
   const senderName = ctx.senderName || 'Muhammad Shoaib';
-  const senderBusiness = ctx.senderBusiness || 'Web Development & Client Acquisition';
-
-  const observation =
-    ctx.research.growth_signals.observations[0] ||
-    `your established presence and customer feedback as a ${category} provider in ${city}`;
-
-  const cleanObs = observation.toLowerCase().replace(/\.$/, '');
+  const senderEmail = ctx.senderEmail || 'Mshoaibawan371@gmail.com';
+  const sig = DEFAULT_SIGNATURE(senderName, senderEmail);
 
   let angle = ctx.pitchAngle;
   if (!angle || angle === 'auto') {
-    // Automatically select the best angle based on available context
-    if (cleanObs.includes('rating') || cleanObs.includes('review') || cleanObs.includes('reputable')) {
-      angle = 'local_search';
-    } else if (cleanObs.includes('phone') || cleanObs.includes('call') || cleanObs.includes('appointment')) {
+    const catLower = category.toLowerCase();
+    if (
+      catLower.includes('training') ||
+      catLower.includes('bootcamp') ||
+      catLower.includes('academy') ||
+      catLower.includes('institute') ||
+      catLower.includes('college')
+    ) {
+      angle = 'data_science_training';
+    } else if (
+      catLower.includes('ai') ||
+      catLower.includes('software') ||
+      catLower.includes('saas') ||
+      catLower.includes('tech') ||
+      catLower.includes('automation') ||
+      catLower.includes('agency') ||
+      catLower.includes('consult') ||
+      catLower.includes('logistics') ||
+      catLower.includes('fintech')
+    ) {
+      angle = 'ai_automation';
+    } else if (ctx.research.growth_signals.observations.some(o => o.includes('phone') || o.includes('feedback') || o.includes('rating'))) {
       angle = 'mobile_speed';
     } else {
       angle = 'free_mockup';
@@ -174,7 +216,41 @@ export function generateHeuristicPitch(ctx: PitchContext): EmailPitch {
   let alternativeSubjects: string[] = [];
   let body = '';
 
-  if (angle === 'mobile_speed') {
+  if (angle === 'ai_automation') {
+    subject = `${name} — AI & Workflow Automation question`;
+    alternativeSubjects = [
+      `Automating workflows for ${name}`,
+      `Quick question for ${name} team`,
+      `Idea regarding ${name} operational automation`,
+    ];
+    body = `Hi ${name} team,
+
+I came across ${name} while looking at established ${category} providers in ${city}.
+
+As an AI Developer & Automation Architect specializing in LLMs, Python, and Cloud integrations (Huawei Certified Cloud Developer), I help teams eliminate repetitive manual admin work by deploying custom AI agents and end-to-end automated pipelines (lead enrichment, client intake, and data processing).
+
+Given your active operations in ${city}, I put together a quick workflow automation blueprint showing where AI agents can save your team 10-15+ hours weekly.
+
+Can I shoot the outline over? No catch or sales pressure at all, just thought it might be useful for your team.
+
+${sig}`;
+  } else if (angle === 'data_science_training') {
+    subject = `${name} — Data Science & AI Curriculum / Training`;
+    alternativeSubjects = [
+      `Data Science & LLM Training for ${name}`,
+      `Quick question regarding ${name} technical training`,
+      `AI & Python curriculum collaboration for ${name}`,
+    ];
+    body = `Hi ${name} team,
+
+I came across ${name} while looking at leading training and educational institutions in ${city}.
+
+I am a Data Science Trainer and Huawei Certified Cloud Developer specializing in Python, Large Language Models (LLMs), and Applied AI. I help bootcamps, institutes, and corporate teams deliver hands-on, industry-ready training programs in Data Science, Machine Learning, and Cloud Architecture.
+
+Would your team be open to exploring guest training or collaborating on practical AI/Data Science tracks for your upcoming cohorts? I would be glad to share our curriculum syllabus and past project outlines.
+
+${sig}`;
+  } else if (angle === 'mobile_speed') {
     subject = `${name} — quick question`;
     alternativeSubjects = [
       `Quick question regarding ${name}`,
@@ -191,14 +267,10 @@ I put together a clean 1-page mobile redesign concept for ${name} with an instan
 
 Can I shoot the preview link over? No catch or sales pressure at all, just thought it might be useful for your team.
 
-Best,
-
-${senderName}
-Web Designer & Developer
-${ctx.senderEmail || 'Mshoaibawan371@gmail.com'}
-
-(If you're not interested, just reply "No thanks" and no worries at all!)`;
-  } else if (angle === 'free_mockup') {
+${sig}`;
+  } else {
+    // Default: 'free_mockup' / 'local_search'
+    angle = 'free_mockup';
     subject = `Website concept for ${name}`;
     alternativeSubjects = [
       `Quick preview draft for ${name}`,
@@ -207,7 +279,7 @@ ${ctx.senderEmail || 'Mshoaibawan371@gmail.com'}
     ];
     body = `Hi ${name} team,
 
-I came across your profile while looking up established ${category} providers in ${city}. You clearly have a strong local reputation, but I noticed there is currently no active website linked to your Google business listing.
+I came across your profile while looking up established ${category} providers in ${city}. You clearly have a strong local reputation, but I noticed there is currently no active website linked to your business listing.
 
 When local clients search for ${category} on their phones, over 80% choose whichever provider allows them to view services or submit an instant estimate request directly online.
 
@@ -215,39 +287,7 @@ I actually put together a clean 1-page design preview specifically for ${name} t
 
 Can I send the preview link over? No catch or sales pressure at all—just thought it would be a useful asset for your team.
 
-Best,
-
-${senderName}
-Web Designer & Developer
-${ctx.senderEmail || 'Mshoaibawan371@gmail.com'}
-
-(If this isn't relevant right now, simply reply "No thanks" and I won't follow up.)`;
-  } else {
-    // Default: 'local_search'
-    angle = 'local_search';
-    subject = `Idea for ${name} (${city})`;
-    alternativeSubjects = [
-      `${name} — Google search observation`,
-      `Quick question regarding ${name}`,
-      `Capturing local inquiries for ${name}`,
-    ];
-    body = `Hi there,
-
-I came across ${name} while looking at local ${category} providers in ${city}.
-
-While checking your Google listing, I noticed you don't currently have a dedicated website attached. When customers in ${city} search online, they usually look for photos of past work and an easy contact form before picking up the phone.
-
-I build clean, fast websites for ${category} businesses that help turn local search traffic into booked inquiries.
-
-I already put together a quick preview draft for ${name}. Would it be alright if I sent the preview link over to look at?
-
-Best,
-
-${senderName}
-Web Designer & Developer
-${ctx.senderEmail || 'Mshoaibawan371@gmail.com'}
-
-(If you're all set or not interested, just reply "No thanks" and no worries at all!)`;
+${sig}`;
   }
 
   return {
