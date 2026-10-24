@@ -130,17 +130,6 @@ export interface BusinessLead {
   updated_at: string;
 }
 
-export interface LeadSignal {
-  id: string;
-  lead_id: string;
-  signal_type: 'explicit_demand' | 'evidence_backed' | 'job_opening' | 'expansion_announcement' | 'website_opportunity' | 'operational_challenge';
-  signal_source: string;
-  source_url?: string;
-  evidence_excerpt: string;
-  confidence_score: number;
-  metadata?: Record<string, any>;
-  detected_at: string;
-}
 
 export interface DigitalAuditFindings {
   target_url?: string;
@@ -168,6 +157,19 @@ export interface DigitalAudit {
   recommendations: string[];
   pdf_path?: string;
   audit_date: string;
+  created_at: string;
+}
+
+export interface LeadSignal {
+  id: string;
+  lead_id: string;
+  signal_type: DemandSignalType | 'job_opening' | 'expansion_announcement' | 'operational_challenge' | 'rfp_posting';
+  signal_source: string;
+  source_url?: string;
+  evidence_excerpt: string;
+  confidence_score: number;
+  metadata?: Record<string, any>;
+  detected_at: string;
   created_at: string;
 }
 

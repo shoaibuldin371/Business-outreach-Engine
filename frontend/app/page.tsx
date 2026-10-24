@@ -135,6 +135,49 @@ function renderWebsiteBadge(lead: Lead) {
   );
 }
 
+function renderPriorityBadge(lead: Lead) {
+  const p = lead.priority_level || (
+    (lead.score && lead.score >= 85 && lead.email_verification_status?.includes('mx'))
+      ? 'high'
+      : (lead.score && lead.score >= 70)
+      ? 'medium'
+      : (lead.status === 'bounced' || lead.email_verification_status === 'suppressed' || !lead.email)
+      ? 'needs_review'
+      : 'low'
+  );
+
+  if (p === 'high') {
+    return (
+      <span title={lead.priority_reason || 'Verified email & high demand match'} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 whitespace-nowrap">
+        <Sparkles className="w-2.5 h-2.5 text-emerald-400 shrink-0" />
+        <span>High Priority</span>
+      </span>
+    );
+  }
+  if (p === 'medium') {
+    return (
+      <span title={lead.priority_reason || 'Qualified commercial requirement'} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-500/15 text-sky-300 border border-sky-500/30 whitespace-nowrap">
+        <Target className="w-2.5 h-2.5 text-sky-400 shrink-0" />
+        <span>Medium Priority</span>
+      </span>
+    );
+  }
+  if (p === 'needs_review') {
+    return (
+      <span title={lead.priority_reason || 'Requires manual contact or verification review'} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 whitespace-nowrap">
+        <AlertTriangle className="w-2.5 h-2.5 text-amber-400 shrink-0" />
+        <span>Needs Review</span>
+      </span>
+    );
+  }
+  return (
+    <span title={lead.priority_reason || 'Low signal intensity or cold opportunity'} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-500/15 text-slate-300 border border-slate-500/30 whitespace-nowrap">
+      <Clock className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+      <span>Low Priority</span>
+    </span>
+  );
+}
+
 export default function DashboardPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -640,8 +683,9 @@ export default function DashboardPage() {
                       </div>
                     </div>
 
-                    {/* Service & Signal Badges */}
+                    {/* Priority, Service & Signal Badges */}
                     <div className="flex items-center gap-1.5 flex-wrap">
+                      {renderPriorityBadge(lead)}
                       {renderServiceBadge(lead)}
                       {renderSignalBadge(lead)}
                       {renderWebsiteBadge(lead)}
@@ -838,12 +882,17 @@ export default function DashboardPage() {
                           )}
                         </td>
 
-                        {/* Score */}
+                        {/* Score & Priority */}
                         <td className="py-3.5 px-4">
-                          <span className="font-bold text-slate-200">
-                            {lead.score || 85}
-                          </span>
-                          <span className="text-[10px] text-slate-400">/100</span>
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1">
+                              <span className="font-bold text-slate-200">
+                                {lead.score || 85}
+                              </span>
+                              <span className="text-[10px] text-slate-400">/100</span>
+                            </div>
+                            <div>{renderPriorityBadge(lead)}</div>
+                          </div>
                         </td>
 
                         {/* Actions & Deliverables */}

@@ -45,8 +45,19 @@ export interface Lead {
     total: number;
     explanation: string;
   };
+  priority_level?: 'high' | 'medium' | 'low' | 'needs_review';
+  priority_reason?: string;
   demand_evidence?: string;
   evidence_url?: string;
+  signals?: Array<{
+    id?: string;
+    signal_type: string;
+    signal_source: string;
+    source_url?: string;
+    evidence_excerpt: string;
+    confidence_score: number;
+    detected_at?: string;
+  }>;
   notes?: string;
   email_subject?: string;
   email_body?: string;

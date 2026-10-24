@@ -218,6 +218,20 @@ export default function LeadModal({ lead, onClose, onActionComplete }: LeadModal
                 MX Verified
               </span>
 
+              {/* Priority Level Badge */}
+              <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border flex items-center gap-1 ${
+                lead.priority_level === 'high'
+                  ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                  : lead.priority_level === 'medium'
+                  ? 'bg-sky-500/15 text-sky-300 border-sky-500/30'
+                  : lead.priority_level === 'needs_review'
+                  ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                  : 'bg-slate-500/15 text-slate-300 border-slate-500/30'
+              }`}>
+                <Target className="w-3 h-3" />
+                {(lead.priority_level || 'high').toUpperCase().replace('_', ' ')} PRIORITY
+              </span>
+
               {/* Commercial Relevance Score */}
               <span className="text-xs font-medium text-slate-400">
                 Score: <strong className="text-indigo-400">{breakdown.total}/100</strong>
@@ -320,6 +334,35 @@ export default function LeadModal({ lead, onClose, onActionComplete }: LeadModal
             <div className="text-[11px] text-slate-400 pt-1">
               <em>{breakdown.explanation}</em>
             </div>
+            {lead.priority_reason && (
+              <div className="p-2.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-[11px] text-indigo-200 mt-2">
+                <span className="font-bold text-indigo-300">Priority Rationale: </span>
+                <span>{lead.priority_reason}</span>
+              </div>
+            )}
+            {lead.signals && lead.signals.length > 0 && (
+              <div className="space-y-1.5 pt-2 border-t border-white/5 mt-2">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Recorded Intent Signals:
+                </div>
+                <div className="space-y-1">
+                  {lead.signals.map((sig, idx) => (
+                    <div key={idx} className="p-2 rounded-lg bg-black/30 border border-white/5 text-[11px] space-y-0.5">
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="font-semibold text-indigo-300">{sig.signal_type.replace(/_/g, ' ')}</span>
+                        <span className="text-slate-400 font-mono">Conf: {Math.round(sig.confidence_score * 100)}%</span>
+                      </div>
+                      <p className="text-slate-300 text-xs">{sig.evidence_excerpt}</p>
+                      {sig.source_url && (
+                        <a href={sig.source_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-indigo-400 hover:underline flex items-center gap-1">
+                          Source: {sig.signal_source} <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 3. Contact & Target Email */}

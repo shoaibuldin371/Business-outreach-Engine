@@ -13,6 +13,8 @@ const PUBLIC_PATHS = [
   '/api/approval/approve',
   '/api/approval/reject',
   '/api/outreach/webhook',
+  '/p',
+  '/api/p',
 ];
 
 export function middleware(req: NextRequest) {

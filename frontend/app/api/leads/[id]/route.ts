@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getLeadById, updateLead, getLeadResearch, getDraftsForLead } from '@/lib/server/supabase';
+import { getLeadById, updateLead, getLeadResearch, getDraftsForLead, getLeadSignalsByLeadId } from '@/lib/server/supabase';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,15 +10,17 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       return NextResponse.json({ detail: 'Lead not found' }, { status: 404 });
     }
 
-    const [research, drafts] = await Promise.all([
+    const [research, drafts, signals] = await Promise.all([
       getLeadResearch(lead.id),
       getDraftsForLead(lead.id),
+      getLeadSignalsByLeadId(lead.id),
     ]);
 
     return NextResponse.json({
       ...lead,
       research,
       drafts,
+      signals,
     });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });

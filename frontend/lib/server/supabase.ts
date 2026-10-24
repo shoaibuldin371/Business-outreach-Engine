@@ -11,6 +11,7 @@ export type {
   DashboardStats,
   LeadStatus,
   FailedEmailDetail,
+  LeadSignal,
 } from './types';
 import type {
   BusinessLead,
@@ -24,6 +25,7 @@ import type {
   DashboardStats,
   LeadStatus,
   FailedEmailDetail,
+  LeadSignal,
 } from './types';
 import { classifyEmailError } from './error-classifier';
 
@@ -1313,5 +1315,80 @@ export async function insertSentEmail(
     status: (status === 'sent' ? 'sent' : 'failed') as any,
     error_message: errorMessage,
   });
+}
+
+// In-memory fallback for local development and offline test environments
+const localLeadSignals: LeadSignal[] = [];
+
+/**
+ * Persists an explainable intent signal linked to a lead
+ */
+export async function saveLeadSignal(signal: Partial<LeadSignal>): Promise<LeadSignal> {
+  const sb = getClient();
+  const id = signal.id || crypto.randomUUID();
+  const now = new Date().toISOString();
+  const record: LeadSignal = {
+    id,
+    lead_id: signal.lead_id || '',
+    signal_type: signal.signal_type || 'evidence_backed',
+    signal_source: signal.signal_source || 'official_public_website',
+    source_url: signal.source_url,
+    evidence_excerpt: signal.evidence_excerpt || '',
+    confidence_score: signal.confidence_score || 80,
+    metadata: signal.metadata || {},
+    detected_at: signal.detected_at || now,
+    created_at: now,
+  };
+
+  // Keep local cache updated
+  const existingIdx = localLeadSignals.findIndex((s) => s.id === record.id);
+  if (existingIdx !== -1) {
+    localLeadSignals[existingIdx] = record;
+  } else {
+    localLeadSignals.push(record);
+  }
+
+  if (sb) {
+    try {
+      await sb.from('lead_signals').upsert({
+        id: record.id,
+        lead_id: record.lead_id,
+        signal_type: record.signal_type,
+        signal_source: record.signal_source,
+        source_url: record.source_url,
+        evidence_excerpt: record.evidence_excerpt,
+        confidence_score: record.confidence_score,
+        metadata: record.metadata,
+        detected_at: record.detected_at,
+      });
+    } catch (e) {
+      console.warn('saveLeadSignal warning:', e);
+    }
+  }
+
+  return record;
+}
+
+/**
+ * Retrieves all intent signals detected for a specific lead
+ */
+export async function getLeadSignalsByLeadId(leadId: string): Promise<LeadSignal[]> {
+  const sb = getClient();
+  if (sb) {
+    try {
+      const { data, error } = await sb
+        .from('lead_signals')
+        .select('*')
+        .eq('lead_id', leadId)
+        .order('detected_at', { ascending: false });
+
+      if (!error && data && data.length > 0) return data as LeadSignal[];
+    } catch {}
+  }
+
+  // Return matching signals from local cache
+  return localLeadSignals
+    .filter((s) => s.lead_id === leadId)
+    .sort((a, b) => new Date(b.detected_at || '').getTime() - new Date(a.detected_at || '').getTime());
 }
 

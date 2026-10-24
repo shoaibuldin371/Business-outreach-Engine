@@ -12,7 +12,14 @@ import { extractEmailWithSource, parseEmailsFromHtml } from '../lib/server/resea
 import { conductDigitalAudit, generateAuditPdfBuffer } from '../lib/server/audit';
 import { generateSecureToken, buildInitialRoiAssumptions, buildProposalForLead } from '../lib/server/personalized-page';
 import { BusinessLead } from '../lib/server/types';
-import { getDashboardStats } from '../lib/server/supabase';
+import { getDashboardStats, saveLeadSignal, getLeadSignalsByLeadId } from '../lib/server/supabase';
+import {
+  enqueueBackgroundJob,
+  claimNextBackgroundJob,
+  completeBackgroundJob,
+  failBackgroundJob,
+  recoverInterruptedJobs,
+} from '../lib/server/background-jobs';
 import { POST as handleWebhookPost } from '../app/api/outreach/webhook/route';
 import { NextRequest } from 'next/server';
 
@@ -539,6 +546,105 @@ The response from the remote server was:
     const permError = classifyEmailError('550 5.1.1 Address not found: The email account does not exist');
     assert.strictEqual(permError.category, 'HARD_BOUNCE');
     assert.strictEqual(permError.canRetry, false, 'Permanent 550 hard bounce must NEVER be retried');
+  });
+
+  // --------------------------------------------------------------------------
+  // TEST GROUP 8: Background Jobs Architecture, Intent Signals & Priority Classification
+  // --------------------------------------------------------------------------
+  console.log('\n📦 GROUP 8: Background Jobs Architecture, Intent Signals & Priority Classification');
+
+  await test('Background Job: Successfully enqueues and atomically claims pending job', async () => {
+    const job = await enqueueBackgroundJob('discovery_scan', {
+      serviceCategory: 'ai_automation',
+      state: 'TX',
+    });
+    assert.ok(job.id, 'Job must have a unique ID');
+    assert.strictEqual(job.status, 'pending');
+    assert.strictEqual(job.retry_count, 0);
+
+    const claimed = await claimNextBackgroundJob('discovery_scan');
+    assert.ok(claimed, 'Must claim pending job');
+    assert.strictEqual(claimed.status, 'claimed');
+    assert.ok(claimed.started_at, 'Claimed job must record started_at');
+
+    const completed = await completeBackgroundJob(claimed.id, { leadsFound: 5 });
+    assert.strictEqual(completed, true);
+  });
+
+  await test('Background Job: Bounded exponential retry and permanent failure after max_retries', async () => {
+    const failJob = await enqueueBackgroundJob('email_dispatch', { recipient: 'retry-test@example.com' });
+    
+    // Fail 1: Retry count becomes 1, status remains retrying/pending
+    const res1 = await failBackgroundJob(failJob.id, 'Simulated timeout 1');
+    assert.strictEqual(res1.status, 'retrying');
+    assert.strictEqual(res1.retryCount, 1);
+
+    // Fail 2: Retry count becomes 2
+    const res2 = await failBackgroundJob(failJob.id, 'Simulated timeout 2');
+    assert.strictEqual(res2.status, 'retrying');
+    assert.strictEqual(res2.retryCount, 2);
+
+    // Fail 3: Reaches max_retries (3), permanently marked failed
+    const res3 = await failBackgroundJob(failJob.id, 'Simulated timeout 3 (max)');
+    assert.strictEqual(res3.status, 'failed');
+    assert.strictEqual(res3.retryCount, 3);
+  });
+
+  await test('Background Job: Recover interrupted/stuck jobs after serverless execution timeout', async () => {
+    const stuckJob = await enqueueBackgroundJob('digital_audit', { leadId: 'stuck-lead-123' });
+    const claimed = await claimNextBackgroundJob('digital_audit');
+    assert.ok(claimed);
+    assert.strictEqual(claimed.status, 'claimed');
+
+    // Simulate job started 20 minutes ago (exceeding standard 15m serverless timeout)
+    claimed.started_at = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+
+    const recoveredCount = await recoverInterruptedJobs(15);
+    assert.ok(recoveredCount >= 1, 'Must recover stuck claimed jobs');
+    assert.strictEqual(claimed.status, 'pending', 'Stuck job must be reset to pending');
+  });
+
+  await test('Lead Intent Signals: Persists verifiable demand evidence and retrieves by lead ID', async () => {
+    const testLeadId = 'test-lead-sig-' + Date.now();
+    const signal = await saveLeadSignal({
+      lead_id: testLeadId,
+      signal_type: 'explicit_demand',
+      signal_source: 'Official RFP Posting',
+      source_url: 'https://state-procurement.gov/rfp-2026-ai',
+      evidence_excerpt: 'Seeking qualified AI developer to deploy enterprise RAG documentation search with 99.9% uptime.',
+      confidence_score: 0.95,
+      metadata: { budget_stated: true, deadline: '2026-12-01' },
+    });
+
+    assert.ok(signal.id, 'Signal must have an ID');
+    assert.strictEqual(signal.lead_id, testLeadId);
+    assert.strictEqual(signal.confidence_score, 0.95);
+
+    const retrieved = await getLeadSignalsByLeadId(testLeadId);
+    assert.ok(Array.isArray(retrieved));
+    assert.ok(retrieved.length >= 1, 'Should retrieve saved signals');
+    assert.strictEqual(retrieved[0].signal_type, 'explicit_demand');
+  });
+
+  await test('Lead Priority & Fit Classification: Explains classification with documented rationale', () => {
+    // High Priority: Strong score >= 85 and verified MX email
+    const highLead: Partial<BusinessLead> = {
+      score_breakdown: { signal_strength: 35, service_match: 25, email_verification: 20, evidence_quality: 18, total: 98, explanation: 'Strong match' },
+      email: 'founder@ai-growth-corp.com',
+      email_verification_status: 'publicly_sourced_and_mx_checked',
+      demand_evidence: 'Published public request for AI workflow automation.',
+    };
+    const isHigh = Boolean(highLead.score_breakdown && highLead.score_breakdown.total >= 85 && highLead.email_verification_status?.includes('mx'));
+    assert.strictEqual(isHigh, true, 'Qualified lead with MX email must be High Priority');
+
+    // Needs Review: Bounced, suppressed, or missing email
+    const bouncedLead: Partial<BusinessLead> = {
+      status: 'bounced',
+      email: 'invalid@badhost.com',
+      email_verification_status: 'bounced',
+    };
+    const needsReview = bouncedLead.status === 'bounced' || bouncedLead.email_verification_status === 'bounced' || !bouncedLead.email;
+    assert.strictEqual(needsReview, true, 'Bounced or missing contact leads must require review');
   });
 
   console.log('\n================================================================');

@@ -8,7 +8,9 @@ import {
   updateAutomationRun,
   isAutomationCurrentlyRunning,
   getAutomationSettings,
+  updateAutomationSettings,
   findExistingLeadByNameAndCity,
+  saveLeadSignal,
 } from './supabase';
 import { 
   discoverBusinesses, 
@@ -16,6 +18,7 @@ import {
   getRandomWorldwideCategory,
   DiscoveryFilters 
 } from './discovery';
+import { US_STATE_HUBS, SERVICE_CATEGORY_METAS } from './us_directory';
 import { verifyBusinessWebsite, verifyEmailAddress } from './verification';
 import { conductBusinessResearch } from './research';
 import { generatePersonalizedPitch, PitchAngle } from './ai';
@@ -23,7 +26,7 @@ import { sendHitlApprovalEmail, sendPitchToProspect, verifyDomainHasMx } from '.
 import { conductDigitalAudit, saveDigitalAudit } from './audit';
 import { generatePersonalizedPage } from './personalized-page';
 import { isSuppressed } from './suppression';
-import { BusinessLead, ScoreBreakdown, EmailVerificationStatus } from './types';
+import { BusinessLead, ScoreBreakdown, EmailVerificationStatus, LeadPriority } from './types';
 
 export interface CycleResult {
   status: 'success' | 'paused' | 'locked' | 'error';
@@ -65,12 +68,44 @@ export async function runDiscoveryCycle(
     };
   }
 
-  // Dynamic Worldwide Hub & High-Growth Category Selection (100% Autopilot)
+  // Search cursor persistence across all 50 US states and 7 service categories
+  const cursor = settings.search_cursor || { state_index: 0, category_index: 0, offset: 0 };
   const isDefaultCity = !customCity || !customCity.trim();
-  const hub = isDefaultCity ? getRandomWorldwideHub() : null;
-  const city = customCity && customCity.trim() ? customCity.trim() : (hub ? `${hub.city}, ${hub.country}` : 'London, United Kingdom');
-  const category = customCategory && customCategory.trim() ? customCategory.trim() : getRandomWorldwideCategory();
-  const count = customCount || settings.batch_size || 8;
+  const selectedStateHub = isDefaultCity
+    ? US_STATE_HUBS[cursor.state_index % US_STATE_HUBS.length]
+    : null;
+  const city =
+    customCity && customCity.trim()
+      ? customCity.trim()
+      : selectedStateHub
+      ? `${selectedStateHub.city}`
+      : 'Birmingham, AL';
+
+  const selectedCategoryMeta = SERVICE_CATEGORY_METAS[cursor.category_index % SERVICE_CATEGORY_METAS.length];
+  const category =
+    customCategory && customCategory.trim()
+      ? customCategory.trim()
+      : selectedCategoryMeta?.name || 'AI Development & Automation';
+
+  const count = customCount || settings.batch_size || 6;
+
+  // Advance search cursor for next execution
+  const nextStateIndex = (cursor.state_index + 1) % US_STATE_HUBS.length;
+  const nextCategoryIndex =
+    nextStateIndex === 0
+      ? (cursor.category_index + 1) % SERVICE_CATEGORY_METAS.length
+      : cursor.category_index;
+  const advancedCursor = {
+    state_index: nextStateIndex,
+    category_index: nextCategoryIndex,
+    offset: (cursor.offset || 0) + count,
+  };
+
+  try {
+    await updateAutomationSettings({ search_cursor: advancedCursor });
+  } catch (cursorErr) {
+    console.warn('Failed advancing search cursor:', cursorErr);
+  }
 
   const run = await createAutomationRun(triggerType, category, city, count);
   const startTime = Date.now();
@@ -78,8 +113,8 @@ export async function runDiscoveryCycle(
   await insertLog(
     'find',
     'info',
-    `Initiated worldwide outreach cycle for ${count} target businesses in '${city}' (${category}) [Trigger: ${triggerType}]`,
-    { category, city, count, run_id: run.id, region: hub?.region || 'Global' },
+    `Initiated US opportunity discovery cycle for ${count} target businesses in '${city}' (${category}) [Cursor: State #${cursor.state_index}, Cat #${cursor.category_index}]`,
+    { category, city, count, run_id: run.id, region: selectedStateHub?.region || 'North America' },
     undefined,
     run.id
   );
@@ -258,6 +293,24 @@ export async function runDiscoveryCycle(
           explanation,
         };
 
+        // Priority classification (High, Medium, Low, Needs Review)
+        let priorityLevel: LeadPriority = 'medium';
+        let priorityReason = 'Standard qualified opportunity matching technical service capabilities.';
+
+        if (!hasContactEmail) {
+          priorityLevel = 'needs_review';
+          priorityReason = 'No verified public email address discovered on business contact pages. Excluded from automated email outreach.';
+        } else if (totalScore >= 85 && candidate.signal_type === 'explicit_demand') {
+          priorityLevel = 'high';
+          priorityReason = `High-priority demand (${totalScore}/100) with verified explicit public requirement: ${candidate.demand_evidence ? candidate.demand_evidence.slice(0, 90) : 'verified requirement'}.`;
+        } else if (totalScore >= 75) {
+          priorityLevel = 'medium';
+          priorityReason = `Medium-priority opportunity (${totalScore}/100) with verified public email and documented operational fit.`;
+        } else {
+          priorityLevel = 'low';
+          priorityReason = `Lower-priority opportunity (${totalScore}/100) or exploratory signal fit.`;
+        }
+
         const leadStatus = !hasContactEmail
           ? 'missing_contact'
           : (settings.require_manual_approval ? 'pending_approval' : 'sent');
@@ -269,6 +322,8 @@ export async function runDiscoveryCycle(
           category: candidate.category,
           service_category: candidate.service_category || 'ai_automation',
           signal_type: candidate.signal_type || 'evidence_backed',
+          priority_level: priorityLevel,
+          priority_reason: priorityReason,
           industry: candidate.industry || 'Technology, Software & SaaS',
           company_size: candidate.company_size || '11-50',
           city: candidate.city,
@@ -296,6 +351,25 @@ export async function runDiscoveryCycle(
         };
 
         const savedLead = await insertLead(leadRecord);
+
+        // Step D.0: Store Intent Signal Record in Supabase
+        try {
+          await saveLeadSignal({
+            lead_id: savedLead.id,
+            signal_type: candidate.signal_type || 'evidence_backed',
+            signal_source: candidate.source || 'official_public_website',
+            source_url: candidate.evidence_url || audit.checkedUrl || candidate.website,
+            evidence_excerpt: candidate.demand_evidence || research.research_notes,
+            confidence_score: totalScore,
+            metadata: {
+              score_breakdown: scoreBreakdown,
+              service_category: candidate.service_category,
+              city: candidate.city,
+            },
+          });
+        } catch (sigErr) {
+          console.warn('saveLeadSignal notice:', sigErr);
+        }
 
         // Step D.1: Conduct Non-Invasive Digital Audit
         try {
