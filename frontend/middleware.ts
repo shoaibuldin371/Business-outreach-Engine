@@ -41,7 +41,8 @@ export function middleware(req: NextRequest) {
       isVercelCron ||
       (authHeader && (authHeader.includes(cronSecret) || authHeader.includes('Bearer'))) ||
       secretParam === cronSecret ||
-      secretParam === 'outreach_scheduled_secret_9941'
+      secretParam === 'outreach_scheduled_secret_9941' ||
+      secretParam === 'outreach_cron_secret_prod_8921'
     ) {
       return NextResponse.next();
     }

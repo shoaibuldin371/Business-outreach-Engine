@@ -1,18 +1,20 @@
-name: 3-Hour Autonomous Business Outreach Engine Scan
+name: Twice-Daily Autonomous Cloud Outreach Scan
 
 on:
   schedule:
-    # Runs every 3 hours (00:00, 03:00, 06:00, 09:00, 12:00, 15:00, 18:00, 21:00 UTC)
-    - cron: '0 */3 * * *'
+    # Runs twice daily at 08:00 and 20:00 UTC (100% Free, runs 24/7 in the cloud while laptop is off)
+    - cron: '0 8,20 * * *'
   workflow_dispatch: # Allows manual trigger from GitHub Actions tab
 
 jobs:
   run-outreach-engine:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger Automated Outreach Discovery Scan (Worldwide)
+      - name: Trigger Twice-Daily Cloud Outreach Discovery Scan
         run: |
-          echo "Triggering 3-hour autonomous worldwide discovery scan on live Vercel production deployment..."
-          curl -s -X POST https://business-outreach-engine.vercel.app/api/agent/trigger \
+          echo "Triggering twice-daily cloud outreach discovery scan on live Vercel production..."
+          curl -s -X POST https://business-outreach-engine.vercel.app/api/cron/trigger?secret=outreach_scheduled_secret_9941 \
             -H "Content-Type: application/json" \
-            -d '{"count": 8}' | jq .
+            -H "Authorization: Bearer outreach_scheduled_secret_9941" \
+            -d '{"count": 6}' | jq .
+
