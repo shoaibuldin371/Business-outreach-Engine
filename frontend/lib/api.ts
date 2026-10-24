@@ -6,12 +6,36 @@ export interface Lead {
   id: string;
   business_name: string;
   category?: string;
+  service_category?:
+    | 'ai_automation'
+    | 'llm_rag_agents'
+    | 'python_dev'
+    | 'huawei_cloud'
+    | 'data_science_analytics'
+    | 'data_science_training'
+    | 'website_digital';
+  signal_type?: 'explicit_demand' | 'evidence_backed' | 'website_opportunity' | 'weak_signal';
+  state?: string;
+  industry?: string;
+  company_size?: string;
   city?: string;
+  country?: string;
   phone?: string;
   email?: string;
+  email_verification_status?: 'syntax_and_mx_verified' | 'syntax_verified' | 'deliverable' | 'unverified' | 'missing';
   website?: string;
   website_status?: string;
   score?: number;
+  score_breakdown?: {
+    signal_strength: number;
+    service_match: number;
+    email_verification: number;
+    evidence_quality: number;
+    total: number;
+    explanation: string;
+  };
+  demand_evidence?: string;
+  evidence_url?: string;
   notes?: string;
   email_subject?: string;
   email_body?: string;
@@ -35,6 +59,15 @@ export interface Lead {
   provider_message_id?: string;
   pitch_angle?: string;
   reply_status?: string;
+  reply_classification?:
+    | 'interested'
+    | 'wants_details'
+    | 'requests_pricing'
+    | 'meeting_requested'
+    | 'not_interested'
+    | 'follow_up_later'
+    | 'unsubscribe'
+    | 'unknown';
   reply_received_at?: string;
   created_at?: string;
   last_contacted_at?: string;
@@ -94,10 +127,35 @@ export async function fetchStats(): Promise<Stats> {
   return res.json();
 }
 
-export async function fetchLeads(status?: string): Promise<Lead[]> {
-  const url = status && status !== 'all' 
-    ? `${API_BASE}/api/leads?status=${encodeURIComponent(status)}`
-    : `${API_BASE}/api/leads`;
+export interface FetchLeadsFilters {
+  status?: string;
+  service_category?: string;
+  signal_type?: string;
+  state?: string;
+  industry?: string;
+  search?: string;
+}
+
+export async function fetchLeads(statusOrFilters?: string | FetchLeadsFilters): Promise<Lead[]> {
+  let url = `${API_BASE}/api/leads`;
+  const params = new URLSearchParams();
+
+  if (typeof statusOrFilters === 'string') {
+    if (statusOrFilters && statusOrFilters !== 'all') {
+      params.append('status', statusOrFilters);
+    }
+  } else if (typeof statusOrFilters === 'object' && statusOrFilters !== null) {
+    if (statusOrFilters.status && statusOrFilters.status !== 'all') params.append('status', statusOrFilters.status);
+    if (statusOrFilters.service_category && statusOrFilters.service_category !== 'all') params.append('service_category', statusOrFilters.service_category);
+    if (statusOrFilters.signal_type && statusOrFilters.signal_type !== 'all') params.append('signal_type', statusOrFilters.signal_type);
+    if (statusOrFilters.state && statusOrFilters.state !== 'all') params.append('state', statusOrFilters.state);
+    if (statusOrFilters.industry && statusOrFilters.industry !== 'all') params.append('industry', statusOrFilters.industry);
+    if (statusOrFilters.search) params.append('search', statusOrFilters.search);
+  }
+
+  const query = params.toString();
+  if (query) url += `?${query}`;
+
   const res = await fetch(url, { cache: 'no-store' });
   if (!res.ok) throw new Error('Failed to fetch leads');
   return res.json();
@@ -138,11 +196,21 @@ export async function fetchLogs(limit = 100): Promise<SystemLog[]> {
   return res.json();
 }
 
-export async function triggerDiscovery(category?: string, city?: string, count = 5): Promise<any> {
+export async function triggerDiscovery(
+  category?: string, 
+  city?: string, 
+  count = 8,
+  options?: {
+    serviceCategory?: string;
+    signalType?: string;
+    state?: string;
+    industry?: string;
+  }
+): Promise<any> {
   const res = await fetch(`${API_BASE}/api/agent/trigger`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ category, city, count }),
+    body: JSON.stringify({ category, city, count, ...options }),
   });
   if (!res.ok) throw new Error('Failed to trigger discovery cycle');
   return res.json();
@@ -209,6 +277,91 @@ export async function runSafePreflightTest(): Promise<any> {
   });
   if (!res.ok) throw new Error('Safe preflight connection test failed');
   return res.json();
+}export interface ProductionHealthTelemetry {
+  deployment: {
+    status: 'Ready' | 'Building' | 'Failed' | 'Verified';
+    commitSha: string | null;
+    commitMessage: string | null;
+    deployedAt: string | null;
+    environment: string;
+    buildError: string | null;
+    host: string;
+  };
+  scheduler: {
+    isConfigured: boolean;
+    scheduleExpression: string;
+    supportedFrequency: string;
+    lastScheduledRun: string | null;
+    lastSuccessfulRun: string | null;
+    nextExpectedRun: string;
+    status: 'idle' | 'running' | 'completed' | 'failed';
+    latestRun: {
+      id?: string;
+      status?: string;
+      started_at?: string;
+      completed_at?: string;
+      discovered_count?: number;
+      qualified_count?: number;
+      error_count?: number;
+      error_message?: string;
+    } | null;
+    configError: string | null;
+  };
+  discovery: {
+    status: 'idle' | 'running' | 'succeeded' | 'failed' | 'empty';
+    totalCandidatesDiscovered: number;
+    totalQualifiedWithVerifiedEmail: number;
+    totalRejected: number;
+    rejectionReasons: {
+      invalid_or_missing_email: number;
+      no_technical_need: number;
+      manual_reject: number;
+      other: number;
+    };
+    lastCycleDiscoveredCount: number;
+    lastCycleStatus: string;
+  };
+  emailSending: {
+    connectionStatus: 'connected' | 'unconfigured' | 'error';
+    providerType: 'smtp' | 'gmail_oauth' | 'none';
+    oauthStatus: 'connected' | 'unconfigured' | 'expired';
+    smtpConfigured: boolean;
+    messagesQueued: number;
+    messagesAttempted: number;
+    messagesAcceptedByProvider: number;
+    failedCount: number;
+    failureCategories: {
+      AUTHENTICATION_FAILURE: number;
+      RATE_LIMIT_EXCEEDED: number;
+      INVALID_RECIPIENT: number;
+      TEMPORARY_PROVIDER_ERROR: number;
+      MESSAGE_REJECTED: number;
+      TIMEOUT_OR_UNKNOWN: number;
+    };
+  };
+  deliveryReplies: {
+    providerAcceptedCount: number;
+    deliveredCount: number;
+    bouncedCount: number;
+    repliedCount: number;
+    unknownDeliveryCount: number;
+    repliesBreakdown: {
+      interested: number;
+      wants_details: number;
+      requests_pricing: number;
+      meeting_requested: number;
+      not_interested: number;
+      follow_up_later: number;
+      unsubscribe: number;
+      unknown: number;
+    };
+    explanation: string;
+  };
+  timestamp: string;
 }
 
-
+export async function fetchProductionHealth(): Promise<ProductionHealthTelemetry> {
+  const res = await fetch(`${API_BASE}/api/production-health`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Failed to fetch production health telemetry');
+  return res.json();
+}

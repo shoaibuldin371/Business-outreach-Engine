@@ -8,7 +8,14 @@ import {
   fetchStats, 
   triggerDiscovery 
 } from '@/lib/api';
+import { 
+  US_50_STATES, 
+  SERVICE_CATEGORIES_LIST, 
+  DEMAND_SIGNALS_LIST, 
+  TARGET_INDUSTRIES_LIST 
+} from '@/lib/constants';
 import LeadModal from '@/components/LeadModal';
+import ProductionHealthSection from '@/components/ProductionHealthSection';
 import DatabaseSettingCard from '@/components/DatabaseSettingCard';
 import DeliverabilityCard from '@/components/DeliverabilityCard';
 import Link from 'next/link';
@@ -26,27 +33,74 @@ import {
   Mail, 
   Globe2, 
   RefreshCw,
-  Compass,
-  ArrowRight,
   Zap,
-  ChevronDown,
-  ChevronUp,
-  SlidersHorizontal,
+  ShieldCheck,
+  Filter,
   Layers,
-  Database
+  Target,
+  ExternalLink,
+  Code2,
+  Cloud,
+  BarChart3,
+  GraduationCap
 } from 'lucide-react';
 
-const HIGH_GROWTH_SHOWCASE = [
-  { label: 'Med Spas & Aesthetics', icon: '💉' },
-  { label: 'Solar & Clean Energy', icon: '⚡' },
-  { label: 'Luxury Custom Builders', icon: '🏡' },
-  { label: 'Commercial HVAC', icon: '❄️' },
-  { label: 'Boutique Law Firms', icon: '⚖️' },
-  { label: 'Cosmetic Orthodontics', icon: '🦷' },
-  { label: 'Exotic Auto Detailing', icon: '🏎️' },
-  { label: 'Commercial Roofing', icon: '🏢' },
-  { label: 'Veterinary Hospitals', icon: '🐾' },
+const TECHNICAL_SERVICES_SHOWCASE = [
+  { label: 'AI Development & Automation', icon: Zap, cat: 'ai_automation', color: 'text-emerald-400' },
+  { label: 'LLMs, RAG & AI Agents', icon: Sparkles, cat: 'llm_rag_agents', color: 'text-violet-400' },
+  { label: 'Python Backend & ETL', icon: Code2, cat: 'python_dev', color: 'text-sky-400' },
+  { label: 'Huawei Cloud Architecture', icon: Cloud, cat: 'huawei_cloud', color: 'text-rose-400' },
+  { label: 'Data Science & Analytics', icon: BarChart3, cat: 'data_science_analytics', color: 'text-amber-400' },
+  { label: 'Corporate Technical Training', icon: GraduationCap, cat: 'data_science_training', color: 'text-indigo-400' },
+  { label: 'Website & Digital Systems', icon: Globe2, cat: 'website_digital', color: 'text-cyan-400' },
 ];
+
+function renderServiceBadge(lead: Lead) {
+  const cat = lead.service_category || 'ai_automation';
+  const meta: Record<string, { label: string; icon: any; color: string }> = {
+    ai_automation: { label: 'AI & Automation', icon: Zap, color: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' },
+    llm_rag_agents: { label: 'LLMs & AI Agents', icon: Sparkles, color: 'bg-violet-500/10 text-violet-300 border-violet-500/30' },
+    python_dev: { label: 'Python Backend', icon: Code2, color: 'bg-sky-500/10 text-sky-300 border-sky-500/30' },
+    huawei_cloud: { label: 'Huawei Cloud', icon: Cloud, color: 'bg-rose-500/10 text-rose-300 border-rose-500/30' },
+    data_science_analytics: { label: 'Data Analytics', icon: BarChart3, color: 'bg-amber-500/10 text-amber-300 border-amber-500/30' },
+    data_science_training: { label: 'Corporate Training', icon: GraduationCap, color: 'bg-indigo-500/10 text-indigo-300 border-indigo-500/30' },
+    website_digital: { label: 'Website & Digital', icon: Globe2, color: 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30' },
+  };
+  const item = meta[cat] || meta.ai_automation;
+  const Icon = item.icon;
+  return (
+    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] md:text-[11px] font-semibold border ${item.color} truncate`}>
+      <Icon className="w-3 h-3 shrink-0" />
+      <span className="truncate">{item.label}</span>
+    </span>
+  );
+}
+
+function renderSignalBadge(lead: Lead) {
+  const sig = lead.signal_type || 'evidence_backed';
+  if (sig === 'explicit_demand') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+        <Zap className="w-2.5 h-2.5 text-amber-400 shrink-0" />
+        <span>Explicit Demand</span>
+      </span>
+    );
+  }
+  if (sig === 'website_opportunity') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+        <Globe2 className="w-2.5 h-2.5 text-cyan-400 shrink-0" />
+        <span>Website Opp</span>
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+      <Target className="w-2.5 h-2.5 text-indigo-400 shrink-0" />
+      <span>Evidence-Backed</span>
+    </span>
+  );
+}
 
 function renderWebsiteBadge(lead: Lead) {
   const status = (lead.website_status || '').toLowerCase().trim();
@@ -73,7 +127,7 @@ function renderWebsiteBadge(lead: Lead) {
   return (
     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] md:text-[11px] font-semibold bg-cyan-500/10 text-cyan-300 border border-cyan-500/25 truncate">
       <Globe2 className="w-3 h-3 shrink-0 text-cyan-400" />
-      <span className="truncate">Needs Redesign</span>
+      <span className="truncate">Active Website</span>
     </span>
   );
 }
@@ -82,7 +136,19 @@ export default function DashboardPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [activeFilter, setActiveFilter] = useState<string>('active');
+  
+  // Dashboard multi-criteria filter state
+  const [selectedService, setSelectedService] = useState<string>('all');
+  const [selectedSignal, setSelectedSignal] = useState<string>('all');
+  const [selectedState, setSelectedState] = useState<string>('all');
+  const [selectedIndustry, setSelectedIndustry] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Discovery execution configuration
+  const [triggerService, setTriggerService] = useState<string>('all');
+  const [triggerState, setTriggerState] = useState<string>('all');
+  const [triggerSignal, setTriggerSignal] = useState<string>('all');
+
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(true);
   const [discovering, setDiscovering] = useState(false);
@@ -91,7 +157,14 @@ export default function DashboardPage() {
   const loadData = async () => {
     try {
       const [leadsData, statsData] = await Promise.all([
-        fetchLeads(activeFilter),
+        fetchLeads({
+          status: activeFilter,
+          service_category: selectedService,
+          signal_type: selectedSignal,
+          state: selectedState,
+          industry: selectedIndustry,
+          search: searchQuery
+        }),
         fetchStats(),
       ]);
       setLeads(leadsData);
@@ -107,16 +180,20 @@ export default function DashboardPage() {
     loadData();
     const interval = setInterval(loadData, 8000);
     return () => clearInterval(interval);
-  }, [activeFilter]);
+  }, [activeFilter, selectedService, selectedSignal, selectedState, selectedIndustry]);
 
   const handleTriggerDiscovery = async () => {
     setDiscovering(true);
     setNotification(null);
     try {
-      const res = await triggerDiscovery(undefined, undefined, 8);
+      const res = await triggerDiscovery(undefined, undefined, 8, {
+        serviceCategory: triggerService !== 'all' ? triggerService : undefined,
+        signalType: triggerSignal !== 'all' ? triggerSignal : undefined,
+        state: triggerState !== 'all' ? triggerState : undefined
+      });
       setNotification({
         type: 'success',
-        message: `✓ Autonomous Cycle Executed! Audited prospective businesses in worldwide hub (${res.leads_qualified || 0} qualified, no-website leads pushed to Supabase).`
+        message: `✓ Autonomous US Cycle Executed! Audited prospective businesses (${res.leads_qualified || 0} qualified leads with verified MX emails & evidence-backed opportunities pushed to Supabase).`
       });
       await loadData();
     } catch (err: any) {
@@ -136,108 +213,172 @@ export default function DashboardPage() {
     return (
       (l.business_name || '').toLowerCase().includes(q) ||
       (l.city || '').toLowerCase().includes(q) ||
+      (l.state || '').toLowerCase().includes(q) ||
       (l.category || '').toLowerCase().includes(q) ||
+      (l.industry || '').toLowerCase().includes(q) ||
       (l.email || '').toLowerCase().includes(q) ||
+      (l.demand_evidence || '').toLowerCase().includes(q) ||
       (l.phone || '').toLowerCase().includes(q)
     );
   });
 
   return (
     <div className="space-y-6 md:space-y-8 max-w-7xl mx-auto w-full">
-      {/* 100% Autonomous Autopilot Banner & Controls */}
-      <div className="bg-gradient-to-br from-[#0e1428] via-[#0b0f1e] to-[#070a14] p-5 sm:p-6 rounded-3xl border border-indigo-500/20 shadow-2xl relative overflow-hidden space-y-5">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          {/* Left: Autopilot Information & High-Growth Sectors */}
-          <div className="space-y-3 max-w-2xl">
+      {/* Professional Positioning Banner & Discovery Controller */}
+      <div className="bg-gradient-to-br from-[#0c1224] via-[#090d1a] to-[#060812] p-5 sm:p-7 rounded-3xl border border-indigo-500/25 shadow-2xl relative overflow-hidden space-y-6">
+        <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
+          {/* Left: Professional Positioning & 7 Core Technical Services */}
+          <div className="space-y-4 max-w-2xl">
             <div className="flex items-center gap-2 text-xs font-bold text-emerald-400 uppercase tracking-wider">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span>100% Autonomous Autopilot Active • 3-Hour Cycle</span>
+              <span>Autonomous Technical Client Acquisition Engine • All 50 US States</span>
             </div>
             
             <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-white tracking-tight">
-              Worldwide High-Growth Business Prospecting
+              AI Developer & Automation Architect Pipeline
             </h1>
             
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              Targeting <span className="text-white font-medium">35+ high-growth sectors</span> across <span className="text-white font-medium">35+ global economic hubs</span> (US, UK, Canada, Australia, UAE, Europe). The autonomous agent continuously audits local businesses without websites, verifies contact emails, and prepares 1-click Gmail HITL approval. <span className="text-indigo-400 font-medium">Zero typing or manual work required!</span>
+              Targeting US businesses across <span className="text-white font-semibold">all 50 states</span> and <span className="text-white font-semibold">12 enterprise industries</span> with verifiable technical needs. The engine audits real operational bottlenecks, verifies DNS MX deliverability, generates tailored pitches, and queues them for your <span className="text-indigo-400 font-semibold">1-click Gmail HITL approval</span>.
             </p>
 
-            {/* High-Growth Industry Showcase Pills */}
+            {/* 7 Technical Services Showcase Pills */}
             <div className="pt-1">
-              <div className="text-[11px] font-semibold text-slate-400 mb-1.5 flex items-center gap-1.5">
+              <div className="text-[11px] font-semibold text-slate-400 mb-2 flex items-center gap-1.5">
                 <Zap className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Auto-Rotating High-Growth Sectors:</span>
+                <span>Active Technical Service Offerings:</span>
               </div>
               <div className="flex items-center gap-1.5 flex-wrap">
-                {HIGH_GROWTH_SHOWCASE.map((item, idx) => (
-                  <span
-                    key={idx}
-                    className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-lg bg-white/5 border border-white/5 text-slate-300 hover:border-indigo-500/30 transition-colors"
-                  >
-                    <span>{item.icon}</span>
-                    <span>{item.label}</span>
-                  </span>
-                ))}
+                {TECHNICAL_SERVICES_SHOWCASE.map((item, idx) => {
+                  const Icon = item.icon;
+                  const isActive = selectedService === item.cat;
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => setSelectedService(isActive ? 'all' : item.cat)}
+                      className={`inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-lg border transition-all ${
+                        isActive
+                          ? 'bg-indigo-600/30 border-indigo-500 text-white shadow-sm'
+                          : 'bg-white/5 border-white/5 text-slate-300 hover:border-indigo-500/30'
+                      }`}
+                    >
+                      <Icon className={`w-3 h-3 ${item.color}`} />
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
-            {/* Autonomous System Pillars */}
-            <div className="pt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {/* Nationwide Verification Pillars */}
+            <div className="pt-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
               <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
-                <div className="text-[10px] text-slate-400 font-medium">Global Territory</div>
+                <div className="text-[10px] text-slate-400 font-medium">Nationwide Coverage</div>
                 <div className="text-xs font-bold text-white flex items-center gap-1 mt-0.5">
-                  <Globe2 className="w-3 h-3 text-cyan-400" /> Auto Worldwide
+                  <Globe2 className="w-3 h-3 text-cyan-400" /> All 50 US States + DC
                 </div>
               </div>
               <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
-                <div className="text-[10px] text-slate-400 font-medium">Cron Schedule</div>
+                <div className="text-[10px] text-slate-400 font-medium">Cron Automation</div>
                 <div className="text-xs font-bold text-emerald-400 flex items-center gap-1 mt-0.5">
                   <Clock className="w-3 h-3 text-emerald-400" /> Every 3 Hours
                 </div>
               </div>
               <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
-                <div className="text-[10px] text-slate-400 font-medium">Pitch Style</div>
-                <div className="text-xs font-bold text-amber-300 flex items-center gap-1 mt-0.5">
-                  <Sparkles className="w-3 h-3 text-amber-400" /> 100% Humanized
+                <div className="text-[10px] text-slate-400 font-medium">Deliverability Standard</div>
+                <div className="text-xs font-bold text-sky-300 flex items-center gap-1 mt-0.5">
+                  <ShieldCheck className="w-3 h-3 text-sky-400" /> DNS MX Deliverable
                 </div>
               </div>
               <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
-                <div className="text-[10px] text-slate-400 font-medium">Dispatch Gateway</div>
+                <div className="text-[10px] text-slate-400 font-medium">Safety Workflow</div>
                 <div className="text-xs font-bold text-indigo-300 flex items-center gap-1 mt-0.5">
-                  <Send className="w-3 h-3 text-indigo-400" /> Gmail SMTP (Live)
+                  <Send className="w-3 h-3 text-indigo-400" /> 1-Click HITL Review
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Right: Autopilot Action Box (1-Click Run, No Typing Needed) */}
-          <div className="p-4 sm:p-5 rounded-2xl bg-slate-900/90 border border-indigo-500/20 flex flex-col gap-3 shadow-2xl shrink-0 w-full lg:w-80">
+          {/* Right: Targeted Discovery Controller (Run Nationwide or by Service/State) */}
+          <div className="p-5 rounded-2xl bg-slate-900/90 border border-indigo-500/25 flex flex-col gap-3.5 shadow-2xl shrink-0 w-full lg:w-88">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-white flex items-center gap-1.5">
                 <Sparkles className="w-4 h-4 text-indigo-400" />
-                Autonomous Engine
+                Targeted US Discovery
               </span>
               <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                ● 24/7 Autopilot
+                ● Ready to Scan
               </span>
             </div>
 
             <p className="text-[11px] text-slate-400 leading-normal">
-              Engine autonomously discovers verified businesses worldwide every 3 hours and auto-delivers humanized pitches directly via your Gmail.
+              Select specific filters or leave as &ldquo;All&rdquo; for autonomous rotation across US states and technical categories.
             </p>
+
+            <div className="space-y-2 text-xs">
+              <div>
+                <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-1">
+                  Target Service
+                </label>
+                <select
+                  value={triggerService}
+                  onChange={(e) => setTriggerService(e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded-lg bg-slate-800 border border-white/10 text-slate-200 text-xs focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="all">⚡ All Technical Services (Auto-Rotate)</option>
+                  {SERVICE_CATEGORIES_LIST.filter(c => c.id !== 'all').map(c => (
+                    <option key={c.id} value={c.id}>{c.icon} {c.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-1">
+                    US State
+                  </label>
+                  <select
+                    value={triggerState}
+                    onChange={(e) => setTriggerState(e.target.value)}
+                    className="w-full px-2 py-1.5 rounded-lg bg-slate-800 border border-white/10 text-slate-200 text-xs focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="all">🇺🇸 All 50 States</option>
+                    {US_50_STATES.map(s => (
+                      <option key={s.code} value={s.code}>{s.code} - {s.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-1">
+                    Demand Signal
+                  </label>
+                  <select
+                    value={triggerSignal}
+                    onChange={(e) => setTriggerSignal(e.target.value)}
+                    className="w-full px-2 py-1.5 rounded-lg bg-slate-800 border border-white/10 text-slate-200 text-xs focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="all">All Signals</option>
+                    <option value="explicit_demand">⚡ Explicit Demand</option>
+                    <option value="evidence_backed">🔍 Evidence-Backed</option>
+                    <option value="website_opportunity">🌐 Website Opp</option>
+                  </select>
+                </div>
+              </div>
+            </div>
 
             {/* Big Instant 1-Click Run Button */}
             <button
               onClick={() => handleTriggerDiscovery()}
               disabled={discovering}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 shadow-xl shadow-indigo-500/30 transition-all disabled:opacity-50 active:scale-[0.99]"
+              className="w-full mt-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 shadow-xl shadow-indigo-500/30 transition-all disabled:opacity-50 active:scale-[0.99]"
             >
               <Sparkles className={`w-4 h-4 ${discovering ? 'animate-spin' : ''}`} />
-              <span>{discovering ? 'Auditing Global Hub & Pitching...' : '⚡ Trigger Worldwide Cycle Now'}</span>
+              <span>{discovering ? 'Auditing US Opportunities...' : '⚡ Run US Discovery Cycle Now'}</span>
             </button>
 
             <div className="text-[10px] text-center text-slate-400">
-              Autonomously picks next high-wealth city, category & verified leads
+              Zero guessing • Only stores verified MX deliverable public emails
             </div>
           </div>
         </div>
@@ -254,13 +395,16 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* Real Production System Health Section (Deployment, Scheduler, Discovery, Gmail Sending, Replies) */}
+      <ProductionHealthSection />
+
       {/* Database Engine & Central Store Settings */}
       <DatabaseSettingCard initialTelemetry={stats?.database} />
 
       {/* Deliverability & Sender Reputation Guard */}
       <DeliverabilityCard />
 
-      {/* KPI Stats Grid (Fully responsive on phone & tablet) */}
+      {/* KPI Stats Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
         <div className="p-4 sm:p-5 rounded-2xl bg-[#0e1322] border border-white/5 space-y-1">
           <span className="text-xs font-medium text-slate-400">Total Audited</span>
@@ -282,7 +426,7 @@ export default function DashboardPage() {
         <div className="p-4 sm:p-5 rounded-2xl bg-[#0e1322] border border-amber-500/20 space-y-1">
           <span className="text-xs font-medium text-amber-400 flex items-center gap-1">
             <Clock className="w-3.5 h-3.5 shrink-0" />
-            <span>Email Ready</span>
+            <span>Drafts Pending</span>
           </span>
           <div className="text-xl sm:text-2xl font-bold text-amber-300">{stats?.pending_approval || 0}</div>
           <div className="text-[10px] sm:text-[11px] text-slate-400">1-click pitch review</div>
@@ -290,11 +434,11 @@ export default function DashboardPage() {
 
         <div className="p-4 sm:p-5 rounded-2xl bg-[#0e1322] border border-sky-500/20 space-y-1">
           <span className="text-xs font-medium text-sky-400 flex items-center gap-1">
-            <Mail className="w-3.5 h-3.5 shrink-0" />
+            <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
             <span>Target Emails</span>
           </span>
           <div className="text-xl sm:text-2xl font-bold text-sky-300">{stats?.total_leads || 0}</div>
-          <div className="text-[10px] sm:text-[11px] text-slate-400">100% verified emails</div>
+          <div className="text-[10px] sm:text-[11px] text-slate-400">100% MX verified</div>
         </div>
 
         <Link
@@ -313,7 +457,7 @@ export default function DashboardPage() {
           <div className="text-xl sm:text-2xl font-bold text-emerald-300">
             {stats?.accepted_by_provider_count ?? stats?.sent_count ?? 0}
           </div>
-          <div className="text-[10px] sm:text-[11px] text-slate-400">Accepted by provider</div>
+          <div className="text-[10px] sm:text-[11px] text-slate-400">Accepted by Gmail</div>
         </Link>
 
         <div className="p-4 sm:p-5 rounded-2xl bg-[#0e1322] border border-purple-500/20 space-y-1 bg-purple-500/[0.03]">
@@ -332,13 +476,13 @@ export default function DashboardPage() {
 
       {/* Main Content Area */}
       <div className="p-4 sm:p-6 rounded-2xl bg-[#0b0f1d] border border-white/5 space-y-5">
-        {/* Filters & Search Toolbar */}
+        {/* Top Status Tabs */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/5 pb-4">
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full">
             {[
               { id: 'active', label: `🚀 Emailed & Active (${stats?.total_leads || 0})` },
+              { id: 'pending_approval', label: `✉️ Drafts for Review (${stats?.pending_approval || 0})` },
               { id: 'completed', label: `✅ Sent via Gmail (${stats?.sent_count || 0})` },
-              { id: 'pending_approval', label: `✉️ Drafts (${stats?.pending_approval || 0})` },
               { id: 'rejected', label: `❌ Rejected (${stats?.rejected_count || 0})` },
               { id: 'all', label: `🗄️ All Records (${stats?.total_leads || 0})` },
             ].map(tab => (
@@ -362,9 +506,77 @@ export default function DashboardPage() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search business or city..."
+              placeholder="Search company, city, state, need..."
               className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-900 border border-white/10 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500"
             />
+          </div>
+        </div>
+
+        {/* Multi-Criteria Filter Bar (Service Category, Signal, State, Industry) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 p-3 rounded-xl bg-slate-900/50 border border-white/5 text-xs">
+          {/* Service Category Filter */}
+          <div>
+            <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-1">
+              Service Category
+            </label>
+            <select
+              value={selectedService}
+              onChange={(e) => setSelectedService(e.target.value)}
+              className="w-full px-2.5 py-1.5 rounded-lg bg-slate-800 border border-white/10 text-slate-200 focus:outline-none focus:border-indigo-500"
+            >
+              {SERVICE_CATEGORIES_LIST.map(c => (
+                <option key={c.id} value={c.id}>{c.icon} {c.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Demand Signal Filter */}
+          <div>
+            <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-1">
+              Demand Signal
+            </label>
+            <select
+              value={selectedSignal}
+              onChange={(e) => setSelectedSignal(e.target.value)}
+              className="w-full px-2.5 py-1.5 rounded-lg bg-slate-800 border border-white/10 text-slate-200 focus:outline-none focus:border-indigo-500"
+            >
+              {DEMAND_SIGNALS_LIST.map(s => (
+                <option key={s.id} value={s.id}>{s.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* US State Filter */}
+          <div>
+            <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-1">
+              US State (50 States)
+            </label>
+            <select
+              value={selectedState}
+              onChange={(e) => setSelectedState(e.target.value)}
+              className="w-full px-2.5 py-1.5 rounded-lg bg-slate-800 border border-white/10 text-slate-200 focus:outline-none focus:border-indigo-500"
+            >
+              <option value="all">🇺🇸 All 50 States + DC</option>
+              {US_50_STATES.map(s => (
+                <option key={s.code} value={s.code}>{s.code} - {s.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Industry Filter */}
+          <div>
+            <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-1">
+              Target Industry
+            </label>
+            <select
+              value={selectedIndustry}
+              onChange={(e) => setSelectedIndustry(e.target.value)}
+              className="w-full px-2.5 py-1.5 rounded-lg bg-slate-800 border border-white/10 text-slate-200 focus:outline-none focus:border-indigo-500 truncate"
+            >
+              {TARGET_INDUSTRIES_LIST.map(ind => (
+                <option key={ind} value={ind === 'All Industries' ? 'all' : ind}>{ind}</option>
+              ))}
+            </select>
           </div>
         </div>
 
@@ -378,15 +590,13 @@ export default function DashboardPage() {
           <div className="py-12 sm:py-16 text-center text-slate-400 text-xs space-y-3 px-4">
             <p className="text-sm text-slate-300 font-medium">
               {activeFilter === 'active'
-                ? 'Your active pipeline is currently ready for prospects. Click "Scan 5 Businesses Now" to fetch verified local businesses worldwide!'
+                ? 'Your active pipeline is currently ready for prospects. Click "Run US Discovery Cycle Now" to find verified US businesses!'
                 : activeFilter === 'pending_approval' 
                 ? 'All caught up! No leads are currently pending review in this queue.'
-                : activeFilter === 'missing_contact'
-                ? 'No leads currently pending contact details.'
-                : 'No leads match the current filter.'}
+                : 'No leads match the current filters.'}
             </p>
             <p className="max-w-md mx-auto text-slate-400">
-              Approved pitches automatically archive to the Completed feature. Click "Scan 5 Businesses Now" to trigger live discovery immediately.
+              Run the discovery cycle to explore verified opportunities across all 50 states with verified DNS MX public emails.
             </p>
             {stats && stats.sent_count > 0 && (
               <Link
@@ -400,7 +610,7 @@ export default function DashboardPage() {
           </div>
         ) : (
           <>
-            {/* 1. Mobile Phone View: Clean Cards (Zero Horizontal Sliding) */}
+            {/* 1. Mobile Phone View: Clean Cards */}
             <div className="block md:hidden space-y-3">
               {filteredLeads.map((lead) => {
                 const isRejected = lead.status === 'rejected';
@@ -420,12 +630,13 @@ export default function DashboardPage() {
                           <span className="truncate">{lead.business_name}</span>
                         </div>
                         <div className="flex items-center gap-1.5 mt-1 text-[11px] text-slate-400 flex-wrap">
-                          <span className="capitalize px-1.5 py-0.5 rounded bg-white/5 text-slate-300 border border-white/5">
-                            {lead.category || 'Local Business'}
-                          </span>
                           <span className="flex items-center gap-1">
                             <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                            {lead.city}
+                            {lead.city}{lead.state ? `, ${lead.state}` : ''}
+                          </span>
+                          <span>•</span>
+                          <span className="text-slate-300">
+                            {lead.industry || lead.category || 'SMB'}
                           </span>
                         </div>
                       </div>
@@ -438,37 +649,35 @@ export default function DashboardPage() {
                       </div>
                     </div>
 
-                    {/* Website Status */}
-                    <div className="flex items-center gap-2 flex-wrap">
+                    {/* Service & Signal Badges */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {renderServiceBadge(lead)}
+                      {renderSignalBadge(lead)}
                       {renderWebsiteBadge(lead)}
-
-                      {isPending && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                          <Clock className="w-3 h-3" /> Pending Review
-                        </span>
-                      )}
-                      {isRejected && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">
-                          <XCircle className="w-3 h-3" /> Rejected
-                        </span>
-                      )}
-                      {isFailed && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">
-                          <AlertTriangle className="w-3 h-3" /> Blocked (Invalid MX)
-                        </span>
-                      )}
-                      {isSent && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                          <CheckCircle2 className="w-3 h-3" /> Auto-Emailed via Gmail
-                        </span>
-                      )}
                     </div>
 
-                    {/* Contact snippet */}
+                    {/* Demand Evidence Snippet */}
+                    {lead.demand_evidence && (
+                      <div className="p-2.5 rounded-lg bg-indigo-500/[0.04] border border-indigo-500/15 text-[11px] text-slate-300 leading-relaxed">
+                        <div className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider mb-0.5">
+                          Verified Technical Need:
+                        </div>
+                        <p className="line-clamp-2">{lead.demand_evidence}</p>
+                      </div>
+                    )}
+
+                    {/* Contact snippet with MX Shield */}
                     <div className="p-2.5 rounded-lg bg-black/20 border border-white/5 space-y-1 text-xs text-slate-300">
-                      <div className="flex items-center gap-1.5 truncate">
-                        <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        <span className="truncate font-mono">{lead.email || 'No email on file'}</span>
+                      <div className="flex items-center justify-between gap-2 truncate">
+                        <div className="flex items-center gap-1.5 truncate">
+                          <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span className="truncate font-mono">{lead.email || 'No email on file'}</span>
+                        </div>
+                        {lead.email_verification_status?.includes('mx') && (
+                          <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-sky-400 bg-sky-500/10 px-1.5 py-0.5 rounded border border-sky-500/20 shrink-0">
+                            <ShieldCheck className="w-2.5 h-2.5" /> MX OK
+                          </span>
+                        )}
                       </div>
                       {lead.phone && (
                         <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
@@ -493,7 +702,7 @@ export default function DashboardPage() {
                           onClick={() => setSelectedLead(lead)}
                           className="w-full py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10"
                         >
-                          {isSent ? 'View Sent Pitch' : isFailed ? 'View Delivery Error' : 'Review Pitch'}
+                          {isSent ? 'View Sent Pitch' : isFailed ? 'View Delivery Error' : 'Review Pitch & Evidence'}
                         </button>
                       )}
                     </div>
@@ -502,22 +711,22 @@ export default function DashboardPage() {
               })}
             </div>
 
-            {/* 2. Desktop View: Perfectly Aligned Fixed Table with ZERO Horizontal Sliding */}
+            {/* 2. Desktop View: Perfectly Aligned Fixed Table */}
             <div className="hidden md:block w-full">
               <table className="w-full table-fixed text-left text-xs text-slate-300">
                 <colgroup>
-                  <col className="w-[28%]" />
-                  <col className="w-[16%]" />
-                  <col className="w-[22%]" />
+                  <col className="w-[26%]" />
+                  <col className="w-[18%]" />
+                  <col className="w-[20%]" />
                   <col className="w-[16%]" />
                   <col className="w-[8%]" />
-                  <col className="w-[10%]" />
+                  <col className="w-[12%]" />
                 </colgroup>
                 <thead>
                   <tr className="border-b border-white/5 text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-900/60">
-                    <th className="py-3 px-4">Business</th>
-                    <th className="py-3 px-4">Website Status</th>
-                    <th className="py-3 px-4">Contact</th>
+                    <th className="py-3 px-4">Business & Location</th>
+                    <th className="py-3 px-4">Service & Signal</th>
+                    <th className="py-3 px-4">Contact (MX Verified)</th>
                     <th className="py-3 px-4">Outreach Status</th>
                     <th className="py-3 px-4">Score</th>
                     <th className="py-3 px-4 text-right">Actions</th>
@@ -532,23 +741,31 @@ export default function DashboardPage() {
 
                     return (
                       <tr key={lead.id} className="hover:bg-white/[0.02] transition-colors group">
-                        {/* Business */}
+                        {/* Business & Location */}
                         <td className="py-3.5 px-4 truncate">
                           <div className="font-semibold text-white group-hover:text-indigo-400 transition-colors truncate">
                             {lead.business_name}
                           </div>
                           <div className="text-[11px] text-slate-400 flex items-center gap-1.5 mt-0.5 truncate">
-                            <span>{lead.category || 'Local Service'}</span>
-                            <span>•</span>
                             <span className="flex items-center gap-0.5 truncate">
-                              <MapPin className="w-3 h-3 shrink-0" /> {lead.city}
+                              <MapPin className="w-3 h-3 shrink-0" /> {lead.city}{lead.state ? `, ${lead.state}` : ''}
                             </span>
+                            <span>•</span>
+                            <span className="truncate">{lead.industry || lead.category || 'SMB'}</span>
                           </div>
+                          {lead.demand_evidence && (
+                            <div className="text-[10px] text-slate-400 truncate mt-1 italic">
+                              Need: {lead.demand_evidence}
+                            </div>
+                          )}
                         </td>
 
-                        {/* Website Status */}
+                        {/* Service & Signal */}
                         <td className="py-3.5 px-4 truncate">
-                          {renderWebsiteBadge(lead)}
+                          <div className="space-y-1">
+                            <div>{renderServiceBadge(lead)}</div>
+                            <div>{renderSignalBadge(lead)}</div>
+                          </div>
                         </td>
 
                         {/* Contact */}
@@ -556,6 +773,11 @@ export default function DashboardPage() {
                           <div className="flex items-center gap-1.5 text-xs font-mono truncate">
                             <Mail className="w-3 h-3 text-slate-400 shrink-0" />
                             <span className="truncate">{lead.email || 'No email on record'}</span>
+                            {lead.email_verification_status?.includes('mx') && (
+                              <span title="DNS MX Verified" className="inline-flex items-center">
+                                <ShieldCheck className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                              </span>
+                            )}
                           </div>
                           {lead.phone && (
                             <div className="flex items-center gap-1.5 text-[11px] text-slate-400 mt-0.5 truncate">
@@ -612,7 +834,7 @@ export default function DashboardPage() {
                               onClick={() => setSelectedLead(lead)}
                               className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors text-slate-200 bg-white/5 hover:bg-white/10 border border-white/10"
                             >
-                              {isSent ? 'View Sent Pitch' : isFailed ? 'View Delivery Error' : 'Review Pitch'}
+                              {isSent ? 'View Pitch' : isFailed ? 'View Error' : 'Review & Pitch'}
                             </button>
                           )}
                         </td>

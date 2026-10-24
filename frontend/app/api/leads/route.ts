@@ -9,9 +9,21 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const status = searchParams.get('status') || undefined;
+    const service_category = searchParams.get('service_category') || undefined;
+    const signal_type = searchParams.get('signal_type') || undefined;
+    const state = searchParams.get('state') || undefined;
+    const industry = searchParams.get('industry') || undefined;
+    const search = searchParams.get('search') || undefined;
     const limit = parseInt(searchParams.get('limit') || '200');
 
-    const leads = await getLeads(status, limit);
+    const leads = await getLeads({
+      status,
+      service_category,
+      signal_type,
+      state,
+      industry,
+      search,
+    }, limit);
     return NextResponse.json(leads);
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });

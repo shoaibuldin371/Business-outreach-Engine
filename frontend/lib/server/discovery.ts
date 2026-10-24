@@ -1,19 +1,59 @@
 import { findExistingLeadByNameAndCity, getClient, getLeads } from './supabase';
+import type { 
+  ServiceCategory, 
+  DemandSignalType, 
+  EmailVerificationStatus, 
+  ScoreBreakdown 
+} from './types';
+import {
+  US_STATE_HUBS,
+  US_TARGET_INDUSTRIES,
+  SERVICE_CATEGORY_METAS,
+  US_NATIONWIDE_EVIDENCE_DIRECTORY,
+  findStateHub,
+} from './us_directory';
+
+export {
+  US_STATE_HUBS,
+  US_TARGET_INDUSTRIES,
+  SERVICE_CATEGORY_METAS,
+  US_NATIONWIDE_EVIDENCE_DIRECTORY,
+  findStateHub,
+};
+
+export interface DiscoveryFilters {
+  category?: string;
+  city?: string;
+  state?: string;
+  serviceCategory?: ServiceCategory;
+  signalType?: DemandSignalType;
+  industry?: string;
+  count?: number;
+}
 
 export interface DiscoveredCandidate {
   business_name: string;
   category: string;
+  service_category?: ServiceCategory;
+  signal_type?: DemandSignalType;
+  industry?: string;
+  company_size?: string;
   city: string;
+  state?: string;
   country: string;
   address?: string;
   phone?: string;
   email?: string;
+  email_verification_status?: EmailVerificationStatus;
   website?: string;
   source: string;
   source_url?: string;
   rating?: number;
   review_count?: number;
   initial_notes?: string;
+  demand_evidence?: string;
+  evidence_url?: string;
+  score_breakdown?: ScoreBreakdown;
 }
 
 export interface WorldwideHub {
@@ -1097,20 +1137,48 @@ export function normalizeBusinessName(name: string): string {
 }
 
 /**
- * Multi-Source 100% REAL Worldwide Discovery Pipeline with Strict Deduplication
+ * Multi-Source 100% REAL US Nationwide & Global Discovery Pipeline with Strict Deduplication
  */
 export async function discoverBusinesses(
-  category = 'ai automation agencies & consultancies',
-  city = 'London',
-  targetCount = 5
+  categoryOrFilters: string | DiscoveryFilters = 'ai automation agencies & consultancies',
+  cityParam = 'Austin, TX',
+  targetCountParam = 5
 ): Promise<DiscoveredCandidate[]> {
+  let category = 'ai automation agencies & consultancies';
+  let city = 'Austin, TX';
+  let targetCount = targetCountParam;
+  let serviceCategory: ServiceCategory | undefined = undefined;
+  let signalType: DemandSignalType | undefined = undefined;
+  let stateFilter: string | undefined = undefined;
+  let industryFilter: string | undefined = undefined;
+
+  if (typeof categoryOrFilters === 'object' && categoryOrFilters !== null) {
+    category = categoryOrFilters.category || category;
+    city = categoryOrFilters.city || (categoryOrFilters.state ? `${categoryOrFilters.state}, US` : city);
+    targetCount = categoryOrFilters.count || targetCountParam;
+    serviceCategory = categoryOrFilters.serviceCategory;
+    signalType = categoryOrFilters.signalType;
+    stateFilter = categoryOrFilters.state;
+    industryFilter = categoryOrFilters.industry;
+  } else if (typeof categoryOrFilters === 'string') {
+    category = categoryOrFilters;
+    city = cityParam;
+    targetCount = targetCountParam;
+  }
+
   const candidatePool: DiscoveredCandidate[] = [];
 
-  // Match hub or pick random worldwide hub
-  const cityName = city.split(',')[0].trim().toLowerCase();
-  let hub = WORLDWIDE_HUBS.find((h) => h.city.toLowerCase().includes(cityName) || cityName.includes(h.city.toLowerCase()));
+  // Match state hub or worldwide hub
+  let hub = US_STATE_HUBS.find((h) => {
+    const cityName = city.split(',')[0].trim().toLowerCase();
+    const statePart = city.split(',')[1]?.trim().toUpperCase();
+    if (stateFilter && h.city.endsWith(stateFilter)) return true;
+    if (statePart && h.city.endsWith(statePart)) return true;
+    return h.city.toLowerCase().includes(cityName) || cityName.includes(h.city.toLowerCase().split(',')[0]);
+  });
+
   if (!hub) {
-    hub = getRandomWorldwideHub();
+    hub = WORLDWIDE_HUBS.find((h) => h.city.toLowerCase().includes(city.toLowerCase())) || getRandomWorldwideHub();
   }
 
   // Step 1: Pre-fetch all known leads from Supabase database to ensure 0 duplicates
@@ -1132,8 +1200,8 @@ export async function discoverBusinesses(
     console.warn('Could not pre-fetch leads for deduplication:', e);
   }
 
-  // Step 2: Prioritize 100% verified Global Tech & Automation Directory
-  const uncontactedFromDirectory = VERIFIED_TECH_AUTOMATION_DIRECTORY.filter((item) => {
+  // Step 2: Prioritize 100% Verified US Nationwide Evidence Directory
+  const uncontactedFromUSDirectory = US_NATIONWIDE_EVIDENCE_DIRECTORY.filter((item) => {
     const norm = normalizeBusinessName(item.business_name);
     const rawLower = item.business_name.toLowerCase().trim();
     if (knownBusinessNames.has(norm) || knownBusinessNames.has(rawLower)) return false;
@@ -1141,25 +1209,46 @@ export async function discoverBusinesses(
     return true;
   });
 
-  // Prioritize matching category or city if specified
-  const prioritizedMatches = uncontactedFromDirectory.filter((item) => {
-    const itemCat = item.category.toLowerCase();
-    const itemCity = item.city.toLowerCase();
-    const reqCat = category.toLowerCase();
-    const reqCity = city.toLowerCase();
-    return itemCat.includes(reqCat) || reqCat.includes(itemCat) || itemCity.includes(reqCity) || reqCity.includes(itemCity);
+  // Filter US Directory by user criteria
+  const filteredUSMatches = uncontactedFromUSDirectory.filter((item) => {
+    if (serviceCategory && item.service_category !== serviceCategory) return false;
+    if (signalType && item.signal_type !== signalType) return false;
+    if (stateFilter && item.state && item.state.toUpperCase() !== stateFilter.toUpperCase()) return false;
+    if (industryFilter && item.industry && !item.industry.toLowerCase().includes(industryFilter.toLowerCase())) return false;
+    return true;
   });
 
-  candidatePool.push(...prioritizedMatches);
+  candidatePool.push(...filteredUSMatches);
+
+  // If no strict filter match or pool still small, add other relevant US directory listings
   if (candidatePool.length < targetCount * 2) {
-    for (const item of uncontactedFromDirectory) {
+    for (const item of uncontactedFromUSDirectory) {
+      if (!candidatePool.some((c) => c.business_name === item.business_name)) {
+        if (!serviceCategory || item.service_category === serviceCategory) {
+          candidatePool.push(item);
+        }
+      }
+    }
+  }
+
+  // Step 3: Global Tech & Automation Directory Fallback
+  if (candidatePool.length < targetCount * 2) {
+    const uncontactedGlobal = VERIFIED_TECH_AUTOMATION_DIRECTORY.filter((item) => {
+      const norm = normalizeBusinessName(item.business_name);
+      const rawLower = item.business_name.toLowerCase().trim();
+      if (knownBusinessNames.has(norm) || knownBusinessNames.has(rawLower)) return false;
+      if (item.email && knownEmails.has(item.email.toLowerCase().trim())) return false;
+      return true;
+    });
+
+    for (const item of uncontactedGlobal) {
       if (!candidatePool.some((c) => c.business_name === item.business_name)) {
         candidatePool.push(item);
       }
     }
   }
 
-  // Step 3: Query OpenStreetMap Nominatim Live Business Directory (strictly software & colleges)
+  // Step 4: Query OpenStreetMap Nominatim Live Business Directory for city
   if (candidatePool.length < targetCount * 2) {
     try {
       const realResults = await discoverNominatim(category, hub.city, targetCount * 2);
@@ -1169,7 +1258,7 @@ export async function discoverBusinesses(
     }
   }
 
-  // Step 4: Try Overpass Verified Commercial Directory (strictly tech-filtered)
+  // Step 5: Try Overpass Verified Commercial Directory (strictly tech-filtered)
   if (candidatePool.length < targetCount * 2) {
     try {
       const overpassResults = await discoverOverpassBusinesses(hub, targetCount);
@@ -1179,28 +1268,7 @@ export async function discoverBusinesses(
     }
   }
 
-
-  // 3. Try Google Places if configured
-  if (candidatePool.length < targetCount && process.env.GOOGLE_PLACES_API_KEY) {
-    try {
-      const places = await discoverGooglePlaces(category, hub.city, targetCount);
-      candidatePool.push(...places);
-    } catch (e) {
-      console.warn('Google Places discovery error:', e);
-    }
-  }
-
-  // 4. Try Brave Search if configured
-  if (candidatePool.length < targetCount && process.env.BRAVE_SEARCH_API_KEY) {
-    try {
-      const braveResults = await discoverBraveSearch(category, hub.city, targetCount);
-      candidatePool.push(...braveResults);
-    } catch (e) {
-      console.warn('Brave Search discovery error:', e);
-    }
-  }
-
-  // 5. Strict Deduplication against database and current run
+  // 6. Strict Deduplication against database and current run
   const seenInRun = new Set<string>();
   const uniqueCandidates: DiscoveredCandidate[] = [];
 

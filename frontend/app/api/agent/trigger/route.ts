@@ -23,7 +23,17 @@ export async function POST(req: NextRequest) {
     const city = body.city && body.city.trim() ? body.city.trim() : undefined;
     const count = body.count ? parseInt(body.count) : 8;
 
-    const result = await runDiscoveryCycle(category, city, count, 'manual');
+    const options = {
+      category,
+      city,
+      count,
+      serviceCategory: body.serviceCategory || body.service_category,
+      signalType: body.signalType || body.signal_type,
+      state: body.state,
+      industry: body.industry,
+    };
+
+    const result = await runDiscoveryCycle(category, city, count, 'manual', options);
     return NextResponse.json(result);
   } catch (e: any) {
     return NextResponse.json({ status: 'error', message: e.message }, { status: 500 });

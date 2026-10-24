@@ -31,25 +31,73 @@ export type EmailDeliveryStatus =
   | 'reply_received'
   | 'rejected';
 
+export type ServiceCategory =
+  | 'ai_automation'
+  | 'llm_rag_agents'
+  | 'python_dev'
+  | 'huawei_cloud'
+  | 'data_science_analytics'
+  | 'data_science_training'
+  | 'website_digital';
+
+export type DemandSignalType =
+  | 'explicit_demand'
+  | 'evidence_backed'
+  | 'website_opportunity'
+  | 'weak_signal';
+
+export type EmailVerificationStatus =
+  | 'syntax_and_mx_verified'
+  | 'syntax_verified'
+  | 'deliverable'
+  | 'unverified'
+  | 'missing';
+
 export type WebsiteStatus =
   | 'none_found'
   | 'unreachable'
-  | 'verified_live'
-  | 'social_only';
+  | 'verified_live';
+
+export type ReplyClassification =
+  | 'interested'
+  | 'wants_details'
+  | 'requests_pricing'
+  | 'meeting_requested'
+  | 'not_interested'
+  | 'follow_up_later'
+  | 'unsubscribe'
+  | 'unknown';
+
+export interface ScoreBreakdown {
+  signal_strength: number;
+  service_match: number;
+  email_verification: number;
+  evidence_quality: number;
+  total: number;
+  explanation: string;
+}
 
 export interface BusinessLead {
   id: string;
   business_name: string;
   category?: string;
+  service_category?: ServiceCategory;
+  signal_type?: DemandSignalType;
+  industry?: string;
+  company_size?: string;
   city?: string;
   country?: string;
   state?: string;
   address?: string;
   phone?: string;
   email?: string;
+  email_verification_status?: EmailVerificationStatus;
   website?: string;
   website_status?: string;
   confidence_score?: number;
+  score_breakdown?: ScoreBreakdown;
+  demand_evidence?: string;
+  evidence_url?: string;
   research_status?: 'pending' | 'in_progress' | 'completed' | 'failed';
   status: LeadStatus;
   rejection_reason?: string;
@@ -59,6 +107,7 @@ export interface BusinessLead {
   approval_token?: string;
   source?: string;
   last_contacted_at?: string;
+  reply_classification?: ReplyClassification;
   created_at: string;
   updated_at: string;
 }

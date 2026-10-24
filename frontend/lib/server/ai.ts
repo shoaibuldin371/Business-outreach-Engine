@@ -1,11 +1,17 @@
 import { DeepResearchResult } from './research';
+import type { ServiceCategory, DemandSignalType } from './types';
 
 export type PitchAngle =
+  | 'ai_automation'
+  | 'llm_rag_agents'
+  | 'python_dev'
+  | 'huawei_cloud'
+  | 'data_science_analytics'
+  | 'data_science_training'
+  | 'website_digital'
   | 'local_search'
   | 'mobile_speed'
-  | 'free_mockup'
-  | 'ai_automation'
-  | 'data_science_training';
+  | 'free_mockup';
 
 export interface EmailPitch {
   subject: string;
@@ -25,6 +31,12 @@ export interface PitchContext {
   senderEmail?: string;
   senderBusiness?: string;
   pitchAngle?: PitchAngle | 'auto';
+  serviceCategory?: ServiceCategory;
+  signalType?: DemandSignalType;
+  demandEvidence?: string;
+  evidenceUrl?: string;
+  state?: string;
+  industry?: string;
 }
 
 const DEFAULT_SIGNATURE = (name = 'Muhammad Shoaib', email = 'Mshoaibawan371@gmail.com') => `Best,
@@ -41,12 +53,13 @@ async function generateWithAnthropic(
   apiKey: string,
   ctx: PitchContext
 ): Promise<EmailPitch | null> {
-  const chosenAngle = ctx.pitchAngle && ctx.pitchAngle !== 'auto' ? ctx.pitchAngle : 'ai_automation';
-  const prompt = `You are an elite B2B outreach specialist writing a cold email to a business leader.
+  const chosenAngle = ctx.serviceCategory || (ctx.pitchAngle && ctx.pitchAngle !== 'auto' ? ctx.pitchAngle : 'ai_automation');
+  const prompt = `You are an elite B2B outreach specialist writing a personalized cold email to a business leader.
 Business Name: ${ctx.businessName}
-Niche: ${ctx.category}
-Location: ${ctx.city}
+Niche: ${ctx.category} (${ctx.industry || 'Technology Services'})
+Location: ${ctx.city}, ${ctx.state || 'US'}
 Angle: ${chosenAngle}
+Verified Demand Evidence: ${ctx.demandEvidence || 'Verified operational opportunity during business audit.'}
 Key Research Observations:
 ${ctx.research.growth_signals.observations.join('\n')}
 
@@ -54,19 +67,23 @@ Sender Profile:
 Name: ${ctx.senderName || 'Muhammad Shoaib'}
 Email: ${ctx.senderEmail || 'Mshoaibawan371@gmail.com'}
 Specialization: AI Developer & Automation Architect | Huawei Certified Cloud Developer | LLMs & Python | Data Science Trainer
-Offer: ${ctx.offerService || 'AI Automation, Custom LLM Workflows, Cloud Architecture & High-Converting Digital Infrastructure'}
+Offer: ${ctx.offerService || 'AI Automation, Custom LLM Workflows, Python Backends & Cloud Architecture'}
 
 Strict Requirements:
-1. Mention the actual business name and at least one factual research observation.
-2. If Angle is 'ai_automation': Highlight automating repetitive manual workflows (client intake, lead qualification, data pipelines) using custom AI agents, LLMs, and Python.
-3. If Angle is 'data_science_training': Highlight hands-on training/upskilling in Data Science, Machine Learning, Python, and Cloud Architecture for cohorts/teams.
-4. If Angle is 'mobile_speed': Highlight mobile conversion, instant estimate/quote booking, and speed optimization.
-5. If Angle is 'free_mockup' or 'local_search': Highlight building a clean digital presence and automated online client booking.
-6. Be concise (under 130 words), natural, polite, and direct.
-7. NO fake flattery or generic clichés ("I hope this email finds you well", "In today's fast-paced world").
-8. Include a clear, low-pressure permission-based call to action (offering to share a quick preview or outline).
-9. NEVER include any opt-out text or lines like "reply no thanks" or "if not interested reply no thanks".
-10. Sign off with:
+1. Mention the actual business name and cite the verified demand observation.
+2. Align specifically with the Angle:
+   - 'ai_automation': Automating repetitive manual workflows (intake, document processing, API/n8n/Make pipelines) using custom AI agents and Python.
+   - 'llm_rag_agents': Custom RAG systems, role-based document search, and tool-using AI agents querying internal SOPs/docs.
+   - 'python_dev': Backend/API development (FastAPI), automated ETL data pipelines, task automation, and external API integrations.
+   - 'huawei_cloud': Huawei Certified Cloud Developer deployment, ECS/OBS/CCE architecture, and cross-cloud migration.
+   - 'data_science_analytics': Automated business intelligence, SQL/Python data pipelines, KPI dashboards, and predictive forecasting.
+   - 'data_science_training': Corporate Python training, hands-on Data Science/AI workshops, and guest instructor collaboration for cohorts.
+   - 'website_digital': High-converting mobile landing pages, instant quote forms, and automated inquiry capture.
+3. Be concise (under 120 words), natural, polite, and direct.
+4. NO generic clichés or fake flattery ("I hope this email finds you well", "In today's fast-paced world").
+5. Include a low-pressure permission-based call to action (offering to share a quick preview or outline).
+6. NEVER include any opt-out text or lines like "reply no thanks" or "if not interested reply no thanks".
+7. Sign off with:
 Best,
 
 Muhammad Shoaib
@@ -172,45 +189,47 @@ Return strictly JSON: {"subject": "...", "body": "...", "alternativeSubjects": [
  */
 export function generateHeuristicPitch(ctx: PitchContext): EmailPitch {
   const name = ctx.businessName.trim();
-  let rawCategory = (ctx.category || 'local services').toLowerCase().replace(/_/g, ' ');
+  let rawCategory = (ctx.category || 'technology services').toLowerCase().replace(/_/g, ' ');
   if (rawCategory === 'business' || rawCategory === 'local business' || !rawCategory.trim()) {
-    rawCategory = 'local services';
+    rawCategory = 'technology services';
   }
   const category = rawCategory;
   const city = ctx.city.split(',')[0].trim();
+  const state = ctx.state || (ctx.city.includes(',') ? ctx.city.split(',')[1].trim() : 'US');
   const senderName = ctx.senderName || 'Muhammad Shoaib';
   const senderEmail = ctx.senderEmail || 'Mshoaibawan371@gmail.com';
   const sig = DEFAULT_SIGNATURE(senderName, senderEmail);
 
-  let angle = ctx.pitchAngle;
-  if (!angle || angle === 'auto') {
+  // Determine angle from service_category or pitchAngle or keyword inference
+  let angle: PitchAngle = 'ai_automation';
+
+  if (ctx.serviceCategory) {
+    angle = ctx.serviceCategory;
+  } else if (ctx.pitchAngle && ctx.pitchAngle !== 'auto') {
+    angle = ctx.pitchAngle;
+  } else {
     const catLower = category.toLowerCase();
-    if (
-      catLower.includes('training') ||
-      catLower.includes('bootcamp') ||
-      catLower.includes('academy') ||
-      catLower.includes('institute') ||
-      catLower.includes('college')
-    ) {
+    if (catLower.includes('training') || catLower.includes('bootcamp') || catLower.includes('academy') || catLower.includes('institute') || catLower.includes('college')) {
       angle = 'data_science_training';
-    } else if (
-      catLower.includes('ai') ||
-      catLower.includes('software') ||
-      catLower.includes('saas') ||
-      catLower.includes('tech') ||
-      catLower.includes('automation') ||
-      catLower.includes('agency') ||
-      catLower.includes('consult') ||
-      catLower.includes('logistics') ||
-      catLower.includes('fintech')
-    ) {
-      angle = 'ai_automation';
-    } else if (ctx.research.growth_signals.observations.some(o => o.includes('phone') || o.includes('feedback') || o.includes('rating'))) {
-      angle = 'mobile_speed';
+    } else if (catLower.includes('rag') || catLower.includes('llm') || catLower.includes('agent') || catLower.includes('knowledge') || catLower.includes('assistant')) {
+      angle = 'llm_rag_agents';
+    } else if (catLower.includes('python') || catLower.includes('etl') || catLower.includes('api') || catLower.includes('scraping') || catLower.includes('backend')) {
+      angle = 'python_dev';
+    } else if (catLower.includes('huawei') || catLower.includes('cloud deployment') || catLower.includes('cross-cloud')) {
+      angle = 'huawei_cloud';
+    } else if (catLower.includes('analytics') || catLower.includes('data science') || catLower.includes('dashboard') || catLower.includes('forecast') || catLower.includes('bi')) {
+      angle = 'data_science_analytics';
+    } else if (catLower.includes('website') || catLower.includes('redesign') || catLower.includes('landing') || catLower.includes('intake')) {
+      angle = 'website_digital';
     } else {
-      angle = 'free_mockup';
+      angle = 'ai_automation';
     }
   }
+
+  // Use explicit evidence if available
+  const evidenceSnippet = ctx.demandEvidence?.trim() 
+    ? ctx.demandEvidence.split('.')[0] + '.'
+    : (ctx.research.growth_signals.observations[0] || `operational initiatives in ${city}`);
 
   let subject = '';
   let alternativeSubjects: string[] = [];
@@ -219,21 +238,99 @@ export function generateHeuristicPitch(ctx: PitchContext): EmailPitch {
   if (angle === 'ai_automation') {
     subject = `quick question regarding ${name} workflows`;
     alternativeSubjects = [
-      `automation question for ${name}`,
-      `${name} x AI automation pipelines`,
-      `workflow automation idea for ${name}`,
+      `automation idea for ${name}`,
+      `${name} x custom AI workflows`,
+      `workflow automation question for ${name}`,
     ];
     body = `Hi ${name} team,
 
-I was checking out what your team has built at ${name} in ${city} — really solid work.
+I came across ${name} in ${city}, ${state} while reviewing technology initiatives in the ${ctx.industry || category} space.
 
-Quick question: does your team currently build custom AI agents or backend Python automations in-house, or do you ever bring in outside specialists for client projects and internal workflows?
+${evidenceSnippet}
 
-I am an AI Developer & Automation Architect (Huawei Certified Cloud Developer, Python/LLMs). I build custom workflows (client onboarding, CRM/Zapier/n8n/Make integrations, lead enrichment pipelines, and custom AI agents) that eliminate 10-15+ hours of repetitive manual admin every week.
+I am an AI Developer & Automation Architect (Huawei Certified Cloud Developer, Python/LLMs). I build bespoke workflow automations, custom AI intake agents, and multi-system API pipelines (n8n, Make, Zapier, and Python) that connect fragmented business tools and eliminate 10-15+ hours of repetitive manual data entry every week.
 
 I mapped out a quick 2-minute workflow breakdown showing a couple of areas where automated AI agents could plug right into your stack.
 
 Would you be open to me sharing the outline? (No sales pitch or expectation at all, just thought it'd be genuinely helpful for your team.)
+
+${sig}`;
+  } else if (angle === 'llm_rag_agents') {
+    subject = `question on internal knowledge / LLM assistant for ${name}`;
+    alternativeSubjects = [
+      `RAG / document search idea for ${name}`,
+      `${name} x custom AI knowledge assistant`,
+      `quick question for ${name} engineering`,
+    ];
+    body = `Hi ${name} team,
+
+I came across ${name} in ${city} and was following your work in ${ctx.industry || category}.
+
+${evidenceSnippet}
+
+I specialize in building custom RAG (Retrieval-Augmented Generation) systems, enterprise knowledge assistants, and tool-using AI agents that query internal documentation, tickets, or SOPs with strict accuracy and source citations.
+
+Instead of generic chatbot responses, I build domain-specific vector search pipelines that allow your team to instantly search complex documentation and automate repetitive customer inquiries.
+
+Would you be open to a quick 2-minute architecture preview showing how a specialized RAG assistant could integrate with your systems?
+
+${sig}`;
+  } else if (angle === 'python_dev') {
+    subject = `Python backend & API pipeline question for ${name}`;
+    alternativeSubjects = [
+      `Python ETL / backend idea for ${name}`,
+      `${name} x Python API pipelines`,
+      `quick technical question for ${name}`,
+    ];
+    body = `Hi ${name} team,
+
+I was looking into ${name} in ${city}, ${state} and noticed your technical footprint in ${ctx.industry || category}.
+
+${evidenceSnippet}
+
+I am an AI Developer & Python Specialist (Huawei Certified Cloud Developer). I build robust FastAPI microservices, asynchronous ETL data pipelines, third-party API integrations, and task automations that replace fragile spreadsheets and legacy scripts with reliable, monitored services.
+
+I put together a quick technical outline showing how an automated Python data pipeline could handle this workflow with zero manual overhead.
+
+Would you be open to me sending over the outline and a couple of relevant GitHub examples?
+
+${sig}`;
+  } else if (angle === 'huawei_cloud') {
+    subject = `cloud architecture & deployment for ${name}`;
+    alternativeSubjects = [
+      `cloud infrastructure question for ${name}`,
+      `${name} x enterprise cloud architecture`,
+      `Huawei Cloud & deployment inquiry for ${name}`,
+    ];
+    body = `Hi ${name} team,
+
+I came across ${name} in ${city} while researching cloud deployment and infrastructure initiatives in ${ctx.industry || category}.
+
+${evidenceSnippet}
+
+I am a Huawei Certified Cloud Developer and backend systems architect. I help companies configure, containerize, and deploy secure workloads on Huawei Cloud infrastructure (ECS, OBS, CCE, and multi-cloud API gateways), ensuring high availability, streamlined CI/CD, and optimized cloud compute costs.
+
+Would you be open to a quick high-level review of your current cloud deployment setup to see if there are opportunities to optimize latency or infrastructure overhead?
+
+${sig}`;
+  } else if (angle === 'data_science_analytics') {
+    subject = `data pipeline & reporting dashboards for ${name}`;
+    alternativeSubjects = [
+      `analytics & reporting idea for ${name}`,
+      `${name} x automated data intelligence`,
+      `quick question on ${name} reporting pipelines`,
+    ];
+    body = `Hi ${name} team,
+
+I came across ${name} in ${city}, ${state} while reviewing analytics and reporting operations in ${ctx.industry || category}.
+
+${evidenceSnippet}
+
+I build automated business intelligence pipelines, SQL/Python data transformation routines, and interactive dashboards that turn disparate operational records into real-time KPI visibility and predictive forecasts.
+
+I put together a quick 2-minute preview showing how an automated metrics pipeline and executive dashboard could eliminate manual reporting for your team.
+
+Would you be open to me sharing the preview? No catch or sales pressure at all, just thought it would provide immediate value.
 
 ${sig}`;
   } else if (angle === 'data_science_training') {
@@ -245,17 +342,19 @@ ${sig}`;
     ];
     body = `Hi ${name} team,
 
-I came across ${name} while looking at leading tech and data academies in ${city}.
+I came across ${name} while looking at leading tech and training organizations in ${city}, ${state}.
 
-I am a Data Science Trainer and Huawei Certified Cloud Developer specializing in Python, Large Language Models (LLMs), and practical Machine Learning. I help bootcamps and corporate teams deliver hands-on, job-ready training modules for students and technical professionals.
+${evidenceSnippet}
+
+I am a Data Science Trainer and Huawei Certified Cloud Developer specializing in Python, Large Language Models (LLMs), and practical Machine Learning. I help academies and corporate teams deliver hands-on, job-ready training modules and practical lab exercises for students and technical professionals.
 
 Are you currently looking for guest trainers, curriculum mentors, or practical lab instructors for your upcoming Python, Data Science, or AI cohorts?
 
 I'd be glad to share our syllabus and past cohort project outlines if you're open to a quick look.
 
 ${sig}`;
-  } else if (angle === 'mobile_speed') {
-    subject = `${name} — quick question`;
+  } else if (angle === 'website_digital' || angle === 'mobile_speed') {
+    subject = `${name} — quick question regarding client inquiry flow`;
     alternativeSubjects = [
       `Quick question regarding ${name}`,
       `Idea for ${name} (${city})`,
@@ -263,18 +362,19 @@ ${sig}`;
     ];
     body = `Hi ${name} team,
 
-I came across ${name} earlier today while looking at established ${category} providers in ${city}.
+I came across ${name} earlier today while looking at established ${category} providers in ${city}, ${state}.
 
-You clearly have great customer feedback and strong local trust, but I noticed a couple of friction points on mobile—specifically page load speed and how prospective clients request an estimate or booking. Most people searching on smartphones prefer requesting a quote online rather than calling, and bounce if they can't book or get a quick estimate in two clicks.
+${evidenceSnippet}
 
-I put together a clean 1-page mobile redesign concept for ${name} with an instant estimate form to show how you can capture more booked inquiries from your traffic.
+I noticed a couple of friction points on mobile—specifically page load speed and how prospective clients request an estimate or booking. Most people searching on smartphones prefer requesting a quote online rather than calling, and bounce if they can't submit an inquiry in two clicks.
+
+I put together a clean 1-page mobile redesign concept for ${name} with an instant estimate form to show how you can capture more booked inquiries from your search traffic.
 
 Can I shoot the preview link over? No catch or sales pressure at all, just thought it might be useful for your team.
 
 ${sig}`;
   } else {
-    // Default: 'free_mockup' / 'local_search'
-    angle = 'free_mockup';
+    // Default fallback
     subject = `Website concept for ${name}`;
     alternativeSubjects = [
       `Quick preview draft for ${name}`,
@@ -283,7 +383,9 @@ ${sig}`;
     ];
     body = `Hi ${name} team,
 
-I came across your profile while looking up established ${category} providers in ${city}. You clearly have a strong local reputation, but I noticed there is currently no active website linked to your business listing.
+I came across your profile while looking up established ${category} providers in ${city}, ${state}.
+
+${evidenceSnippet}
 
 When local clients search for ${category} on their phones, over 80% choose whichever provider allows them to view services or submit an instant estimate request directly online.
 

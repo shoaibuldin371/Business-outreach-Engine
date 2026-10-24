@@ -13,13 +13,14 @@ import {
 import { 
   discoverBusinesses, 
   getRandomWorldwideHub, 
-  getRandomWorldwideCategory 
+  getRandomWorldwideCategory,
+  DiscoveryFilters 
 } from './discovery';
 import { verifyBusinessWebsite } from './verification';
 import { conductBusinessResearch } from './research';
-import { generatePersonalizedPitch } from './ai';
+import { generatePersonalizedPitch, PitchAngle } from './ai';
 import { sendHitlApprovalEmail, sendPitchToProspect, verifyDomainHasMx } from './email';
-import { BusinessLead } from './types';
+import { BusinessLead, ScoreBreakdown } from './types';
 
 export interface CycleResult {
   status: 'success' | 'paused' | 'locked' | 'error';
@@ -39,7 +40,8 @@ export async function runDiscoveryCycle(
   customCategory?: string,
   customCity?: string,
   customCount?: number,
-  triggerType: 'scheduled_3h' | 'manual' | 'api' = 'manual'
+  triggerType: 'scheduled_3h' | 'manual' | 'api' = 'manual',
+  options?: DiscoveryFilters
 ): Promise<CycleResult> {
   const settings = await getAutomationSettings();
 
@@ -87,8 +89,10 @@ export async function runDiscoveryCycle(
   let errorCount = 0;
 
   try {
-    // 3. Discover candidate businesses across worldwide providers
-    const candidates = await discoverBusinesses(category, city, count);
+    // 3. Discover candidate businesses across nationwide & worldwide providers
+    const candidates = await discoverBusinesses(
+      options ? { ...options, count } : { category, city, count }
+    );
     discoveredCount = candidates.length;
 
     await insertLog(
@@ -149,44 +153,41 @@ export async function runDiscoveryCycle(
           candidate.review_count
         );
 
-        // Step C: Generate Personalized Outreach Pitch matching User's Core Skills
-        const catLower = (candidate.category || '').toLowerCase();
-        let pitchAngle: 'ai_automation' | 'data_science_training' | 'mobile_speed' | 'free_mockup' = 'ai_automation';
-
-        if (
-          catLower.includes('training') ||
-          catLower.includes('bootcamp') ||
-          catLower.includes('academy') ||
-          catLower.includes('institute') ||
-          catLower.includes('college') ||
-          catLower.includes('education') ||
-          catLower.includes('course')
-        ) {
-          pitchAngle = 'data_science_training';
-        } else if (
-          catLower.includes('clinic') ||
-          catLower.includes('dentist') ||
-          catLower.includes('roof') ||
-          catLower.includes('plumb') ||
-          catLower.includes('hvac') ||
-          catLower.includes('contractor')
-        ) {
-          pitchAngle = audit.hasWebsite ? 'mobile_speed' : 'free_mockup';
-        } else {
-          // Default for all tech, SaaS, agency, automation, e-commerce & digital businesses
-          pitchAngle = 'ai_automation';
+        // Step C: Generate Personalized Outreach Pitch matching Candidate's Service Category
+        let pitchAngle: PitchAngle = (candidate.service_category as PitchAngle) || 'ai_automation';
+        if (!candidate.service_category) {
+          const catLower = (candidate.category || '').toLowerCase();
+          if (catLower.includes('training') || catLower.includes('bootcamp') || catLower.includes('academy') || catLower.includes('institute') || catLower.includes('college')) {
+            pitchAngle = 'data_science_training';
+          } else if (catLower.includes('rag') || catLower.includes('llm') || catLower.includes('agent')) {
+            pitchAngle = 'llm_rag_agents';
+          } else if (catLower.includes('python') || catLower.includes('etl') || catLower.includes('api')) {
+            pitchAngle = 'python_dev';
+          } else if (catLower.includes('huawei') || catLower.includes('cloud')) {
+            pitchAngle = 'huawei_cloud';
+          } else if (catLower.includes('analytics') || catLower.includes('data science') || catLower.includes('dashboard')) {
+            pitchAngle = 'data_science_analytics';
+          } else if (catLower.includes('website') || catLower.includes('redesign') || !audit.hasWebsite) {
+            pitchAngle = 'website_digital';
+          }
         }
 
         const pitch = await generatePersonalizedPitch({
           businessName: name,
           category: candidate.category,
           city: candidate.city,
+          state: candidate.state,
+          industry: candidate.industry,
           research,
           offerService: settings.target_offer,
           senderName: settings.sender_name,
           senderEmail: settings.sender_email,
           senderBusiness: settings.sender_business,
           pitchAngle,
+          serviceCategory: candidate.service_category,
+          signalType: candidate.signal_type,
+          demandEvidence: candidate.demand_evidence,
+          evidenceUrl: candidate.evidence_url,
         });
 
         let validContactEmail = '';
@@ -213,6 +214,24 @@ export async function runDiscoveryCycle(
           continue;
         }
 
+        // Explainable Commercial Score Breakdown Calculation
+        const signalPts = candidate.signal_type === 'explicit_demand' ? 35 
+          : candidate.signal_type === 'evidence_backed' ? 28 
+          : candidate.signal_type === 'website_opportunity' ? 22 : 15;
+        const servicePts = 25;
+        const emailPts = 20;
+        const evidencePts = candidate.demand_evidence ? 18 : 12;
+        const totalScore = candidate.score_breakdown?.total || Math.min(100, signalPts + servicePts + emailPts + evidencePts);
+        const explanation = candidate.score_breakdown?.explanation || `${candidate.signal_type === 'explicit_demand' ? 'Explicit public requirement' : 'Documented operational opportunity'} matching technical capabilities; verified domain with valid MX exchange.`;
+        const scoreBreakdown: ScoreBreakdown = candidate.score_breakdown || {
+          signal_strength: signalPts,
+          service_match: servicePts,
+          email_verification: emailPts,
+          evidence_quality: evidencePts,
+          total: totalScore,
+          explanation,
+        };
+
         const leadStatus = settings.require_manual_approval ? 'pending_approval' : 'sent';
         const token = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
 
@@ -220,14 +239,23 @@ export async function runDiscoveryCycle(
         const leadRecord: Partial<BusinessLead> = {
           business_name: name,
           category: candidate.category,
+          service_category: candidate.service_category || 'ai_automation',
+          signal_type: candidate.signal_type || 'evidence_backed',
+          industry: candidate.industry || 'Technology, Software & SaaS',
+          company_size: candidate.company_size || '11-50',
           city: candidate.city,
-          country: candidate.country || 'Worldwide',
+          state: candidate.state || (candidate.city.includes(',') ? candidate.city.split(',')[1].trim() : 'US'),
+          country: candidate.country || 'United States',
           address: candidate.address,
           phone: research.public_phone || candidate.phone || '',
           email: validContactEmail,
-          website: audit.checkedUrl || '',
+          email_verification_status: candidate.email_verification_status || 'syntax_and_mx_verified',
+          website: audit.checkedUrl || candidate.website || '',
           website_status: audit.status,
-          confidence_score: research.confidence_score,
+          confidence_score: totalScore,
+          score_breakdown: scoreBreakdown,
+          demand_evidence: candidate.demand_evidence || research.research_notes,
+          evidence_url: candidate.evidence_url || audit.checkedUrl || '',
           research_status: 'completed',
           status: leadStatus,
           notes: research.research_notes,
