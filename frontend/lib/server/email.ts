@@ -73,9 +73,15 @@ export function isBlockedOrBouncedEmail(email: string): boolean {
   return false;
 }
 
-import { classifyEmailError, ClassifiedEmailError } from './error-classifier';
-export { classifyEmailError };
-export type { ClassifiedEmailError };
+import {
+  classifyEmailError,
+  ClassifiedEmailError,
+  parseBounceNotification,
+  ParsedBounceNotification,
+  extractSmtpCodes,
+} from './error-classifier';
+export { classifyEmailError, parseBounceNotification, extractSmtpCodes };
+export type { ClassifiedEmailError, ParsedBounceNotification };
 
 function getSmtpTransporter() {
   const host = process.env.SMTP_HOST;

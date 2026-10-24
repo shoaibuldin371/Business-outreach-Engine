@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { addToSuppressionList } from '@/lib/server/suppression';
 import { getClient, updateLead, insertLog } from '@/lib/server/supabase';
-import { classifyEmailError } from '@/lib/server/error-classifier';
+import { classifyEmailError, parseBounceNotification } from '@/lib/server/error-classifier';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -47,23 +47,28 @@ export async function POST(req: NextRequest) {
 
     const sb = getClient();
 
-    // 2. Handle Hard Bounces (550 5.1.1 / NoSuchUser / Permanent recipient failure)
+    // 2. Handle Hard Bounces (550 5.1.1 / NoSuchUser / Permanent recipient failure / Address not found)
     if (
       eventType.includes('bounce') ||
       eventType.includes('hard') ||
       rawError.includes('550') ||
       rawError.includes('5.1.1') ||
-      rawError.includes('nosuchuser')
+      rawError.includes('nosuchuser') ||
+      rawError.includes('address not found') ||
+      rawError.includes("wasn't delivered") ||
+      rawError.includes('unable to receive mail')
     ) {
-      const classified = classifyEmailError(rawError || `550 5.1.1 Recipient mailbox does not exist`);
+      const parsedBounce = parseBounceNotification(body);
+      const effectiveSmtpCode = parsedBounce.smtpCode || smtpCode || '550 5.1.1';
+      const effectiveDiagnostic = parsedBounce.diagnosticResponse || rawError || 'Address not found or mailbox does not exist';
 
       // Add to suppression list immediately
       await addToSuppressionList(
         recipient,
         'hard_bounce',
         'webhook_provider_event',
-        classified.smtpCode || smtpCode,
-        classified.message
+        effectiveSmtpCode,
+        effectiveDiagnostic
       );
 
       // Update lead record if leadId provided or found by email
@@ -84,14 +89,20 @@ export async function POST(req: NextRequest) {
             await updateLead(targetLeadId, {
               status: 'bounced',
               email_verification_status: 'bounced',
-              notes: `[WEBHOOK HARD BOUNCE ${classified.smtpCode}]: ${classified.message}`,
+              notes: `[WEBHOOK HARD BOUNCE ${effectiveSmtpCode}]: ${effectiveDiagnostic}`,
             });
 
             await sb.from('outreach_events').insert({
               lead_id: targetLeadId,
               event_type: 'bounced',
               channel: 'email',
-              payload: { recipient, event_id: eventId, error: classified.message, smtp_code: classified.smtpCode },
+              payload: {
+                recipient,
+                event_id: eventId,
+                error: effectiveDiagnostic,
+                smtp_code: effectiveSmtpCode,
+                enhanced_code: parsedBounce.enhancedCode,
+              },
             });
           }
         } catch (dbErr) {
@@ -102,8 +113,8 @@ export async function POST(req: NextRequest) {
       await insertLog(
         'error',
         'error',
-        `Permanent Hard Bounce processed via webhook for '${recipient}' (${classified.smtpCode}). Address permanently suppressed.`,
-        { recipient, event_id: eventId, error: classified.message },
+        `Permanent Hard Bounce processed via webhook for '${recipient}' (${effectiveSmtpCode}). Address permanently suppressed.`,
+        { recipient, event_id: eventId, error: effectiveDiagnostic, smtp_code: effectiveSmtpCode },
         leadId
       );
 
@@ -111,7 +122,8 @@ export async function POST(req: NextRequest) {
         success: true,
         action: 'suppressed_hard_bounce',
         recipient,
-        smtp_code: classified.smtpCode,
+        smtp_code: effectiveSmtpCode,
+        diagnostic: effectiveDiagnostic,
       });
     }
 

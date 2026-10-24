@@ -310,15 +310,54 @@ export async function verifyBusinessWebsite(
 
 import { isSuppressed } from './suppression';
 
+export type MailboxVerificationStatus =
+  | 'unverified'
+  | 'unknown'
+  | 'verified_public_listing'
+  | 'nonexistent'
+  | 'suppressed';
+
+export type DeliveryConfirmationStatus =
+  | 'unattempted'
+  | 'provider_accepted'
+  | 'confirmed_delivered'
+  | 'hard_bounce'
+  | 'temporary_failure';
+
+export interface VerificationTierBreakdown {
+  syntax: {
+    passed: boolean;
+    details: string;
+  };
+  domainMx: {
+    passed: boolean;
+    domain: string;
+    mxCount?: number;
+    details: string;
+  };
+  mailboxLevel: {
+    status: MailboxVerificationStatus;
+    details: string;
+    isGuaranteed: false; // Honest rule: No verifier can guarantee mailbox existence or inbox delivery
+  };
+  deliveryConfirmation: {
+    status: DeliveryConfirmationStatus;
+    confirmedByDeliveryEvent: boolean;
+    details: string;
+  };
+}
+
 export interface EmailVerificationDetail {
   email: string;
   isValidSyntax: boolean;
   hasMxRecords: boolean;
   isSuppressed: boolean;
   isPlaceholderOrGuess: boolean;
+  tiers: VerificationTierBreakdown;
   status:
     | 'publicly_sourced_and_mx_checked'
     | 'syntax_and_mx_verified'
+    | 'mailbox_unknown'
     | 'bounced'
     | 'suppressed'
     | 'invalid_syntax'
@@ -329,6 +368,7 @@ export interface EmailVerificationDetail {
   rejectionReason?: string;
   sourceUrl?: string;
   checkedAt: string;
+  deliverabilityDisclaimer: string;
 }
 
 const RFC_EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
@@ -397,18 +437,40 @@ export function isCredibleEmailSourceUrl(url?: string): boolean {
   return !searchOrDummyPatterns.some((pattern) => trimmed.includes(pattern));
 }
 
+export const DELIVERABILITY_DISCLAIMER =
+  'Domain and MX record presence proves mail server routing capability, but does NOT prove that a specific mailbox exists. Email verification tools cannot guarantee inbox delivery.';
+
+export interface VerifyEmailOptions {
+  sourceUrl?: string;
+  externalMailboxStatus?: 'valid' | 'invalid' | 'unknown' | 'catch_all';
+}
+
 /**
- * Rigorously verifies an email address prior to outreach.
- * Distinguishes syntax validation, DNS MX resolution, suppression checks, and credible source provenance.
- * Transparently acknowledges that MX verification does NOT guarantee mailbox existence.
- * Only emails extracted from credible public sources with active MX are eligible for outreach.
+ * Rigorously verifies an email address prior to outreach across 4 distinct tiers:
+ * 1. Syntax validation (RFC standard)
+ * 2. Domain & MX resolution (Internet DNS routing)
+ * 3. Mailbox-level verification (Honest distinction: never assumes valid if unknown or domain-only)
+ * 4. Actual delivery confirmation (Only confirmed by real downstream delivery events)
+ *
+ * Enforces:
+ * - Never assume email is valid just because domain exists or verifier returns "unknown".
+ * - Never claim email verifier can guarantee inbox delivery.
  */
 export async function verifyEmailAddress(
   email: string | undefined,
-  sourceUrl?: string
+  sourceUrlOrOptions?: string | VerifyEmailOptions
 ): Promise<EmailVerificationDetail> {
   const now = new Date().toISOString();
+  const sourceUrl =
+    typeof sourceUrlOrOptions === 'string'
+      ? sourceUrlOrOptions
+      : sourceUrlOrOptions?.sourceUrl;
+  const externalMailboxStatus =
+    typeof sourceUrlOrOptions === 'object'
+      ? sourceUrlOrOptions?.externalMailboxStatus
+      : undefined;
 
+  // Tier 1: Syntax
   if (!email || !email.trim()) {
     return {
       email: '',
@@ -416,16 +478,30 @@ export async function verifyEmailAddress(
       hasMxRecords: false,
       isSuppressed: false,
       isPlaceholderOrGuess: false,
+      tiers: {
+        syntax: { passed: false, details: 'No email address provided or discovered.' },
+        domainMx: { passed: false, domain: '', details: 'No domain to verify.' },
+        mailboxLevel: {
+          status: 'unverified',
+          details: 'Mailbox check omitted: Address is missing.',
+          isGuaranteed: false,
+        },
+        deliveryConfirmation: {
+          status: 'unattempted',
+          confirmedByDeliveryEvent: false,
+          details: 'Unattempted.',
+        },
+      },
       status: 'missing',
       eligibleForOutreach: false,
       rejectionReason: 'No email address provided or discovered.',
       checkedAt: now,
+      deliverabilityDisclaimer: DELIVERABILITY_DISCLAIMER,
     };
   }
 
   const cleanEmail = email.trim().toLowerCase();
 
-  // 1. Syntax Check
   if (!isValidEmailSyntax(cleanEmail)) {
     return {
       email: cleanEmail,
@@ -433,14 +509,29 @@ export async function verifyEmailAddress(
       hasMxRecords: false,
       isSuppressed: false,
       isPlaceholderOrGuess: false,
+      tiers: {
+        syntax: { passed: false, details: 'Email syntax fails RFC standards or contains malformed characters.' },
+        domainMx: { passed: false, domain: cleanEmail.split('@')[1] || '', details: 'Skipped due to syntax failure.' },
+        mailboxLevel: {
+          status: 'unverified',
+          details: 'Mailbox check skipped: Syntax invalid.',
+          isGuaranteed: false,
+        },
+        deliveryConfirmation: {
+          status: 'unattempted',
+          confirmedByDeliveryEvent: false,
+          details: 'Unattempted.',
+        },
+      },
       status: 'invalid_syntax',
       eligibleForOutreach: false,
       rejectionReason: 'Email syntax fails RFC standards or contains malformed characters.',
       checkedAt: now,
+      deliverabilityDisclaimer: DELIVERABILITY_DISCLAIMER,
     };
   }
 
-  // 2. Placeholder Check
+  // Placeholder & Pattern check
   if (isPlaceholderOrGuessedAddress(cleanEmail)) {
     return {
       email: cleanEmail,
@@ -448,14 +539,29 @@ export async function verifyEmailAddress(
       hasMxRecords: false,
       isSuppressed: false,
       isPlaceholderOrGuess: true,
+      tiers: {
+        syntax: { passed: true, details: 'Syntax passed RFC test.' },
+        domainMx: { passed: false, domain: cleanEmail.split('@')[1] || '', details: 'Placeholder domain rejected.' },
+        mailboxLevel: {
+          status: 'nonexistent',
+          details: 'Address is a placeholder pattern or unsupported guess.',
+          isGuaranteed: false,
+        },
+        deliveryConfirmation: {
+          status: 'unattempted',
+          confirmedByDeliveryEvent: false,
+          details: 'Unattempted.',
+        },
+      },
       status: 'placeholder_rejected',
       eligibleForOutreach: false,
       rejectionReason: 'Address is a placeholder, dummy domain, or unsupported guess.',
       checkedAt: now,
+      deliverabilityDisclaimer: DELIVERABILITY_DISCLAIMER,
     };
   }
 
-  // 3. Suppression & Hard-Bounce Check
+  // Suppression & Hard-Bounce Check
   const suppressed = await isSuppressed(cleanEmail);
   if (suppressed) {
     return {
@@ -464,19 +570,36 @@ export async function verifyEmailAddress(
       hasMxRecords: true,
       isSuppressed: true,
       isPlaceholderOrGuess: false,
+      tiers: {
+        syntax: { passed: true, details: 'Syntax passed RFC test.' },
+        domainMx: { passed: true, domain: cleanEmail.split('@')[1] || '', details: 'Domain valid, but address is suppressed.' },
+        mailboxLevel: {
+          status: 'suppressed',
+          details: 'Address is permanently suppressed due to prior hard bounce (550 5.1.1) or opt-out.',
+          isGuaranteed: false,
+        },
+        deliveryConfirmation: {
+          status: 'hard_bounce',
+          confirmedByDeliveryEvent: false,
+          details: 'Previously recorded hard bounce.',
+        },
+      },
       status: 'suppressed',
       eligibleForOutreach: false,
       rejectionReason: 'Address is permanently suppressed due to prior hard bounce (550 5.1.1) or opt-out.',
       checkedAt: now,
+      deliverabilityDisclaimer: DELIVERABILITY_DISCLAIMER,
     };
   }
 
-  // 4. DNS MX Check
+  // Tier 2: DNS MX Resolution
   const domain = cleanEmail.split('@')[1];
   let hasMx = false;
+  let mxCount = 0;
   try {
     const mxRecords = await dnsPromises.resolveMx(domain);
     hasMx = Array.isArray(mxRecords) && mxRecords.length > 0;
+    mxCount = mxRecords ? mxRecords.length : 0;
   } catch {
     hasMx = false;
   }
@@ -488,41 +611,133 @@ export async function verifyEmailAddress(
       hasMxRecords: false,
       isSuppressed: false,
       isPlaceholderOrGuess: false,
+      tiers: {
+        syntax: { passed: true, details: 'Syntax passed RFC test.' },
+        domainMx: {
+          passed: false,
+          domain,
+          mxCount: 0,
+          details: `Domain '${domain}' has no active mail exchange (MX) servers on the internet.`,
+        },
+        mailboxLevel: {
+          status: 'nonexistent',
+          details: 'Cannot have a valid mailbox because domain has no MX servers.',
+          isGuaranteed: false,
+        },
+        deliveryConfirmation: {
+          status: 'hard_bounce',
+          confirmedByDeliveryEvent: false,
+          details: 'Non-routable domain.',
+        },
+      },
       status: 'missing_mx',
       eligibleForOutreach: false,
       rejectionReason: `Domain '${domain}' has no active mail exchange (MX) servers on the internet.`,
       checkedAt: now,
+      deliverabilityDisclaimer: DELIVERABILITY_DISCLAIMER,
     };
   }
 
-  // 5. Source Provenance & Credibility Check
-  if (!isCredibleEmailSourceUrl(sourceUrl)) {
+  // Tier 3: Mailbox Check & External Verification Status Handling
+  // Rule 7: Do not assume that an email is valid just because the domain exists or verification returns "unknown"
+  if (externalMailboxStatus === 'invalid') {
+    return {
+      email: cleanEmail,
+      isValidSyntax: true,
+      hasMxRecords: true,
+      isSuppressed: false,
+      isPlaceholderOrGuess: false,
+      tiers: {
+        syntax: { passed: true, details: 'Syntax passed RFC test.' },
+        domainMx: { passed: true, domain, mxCount, details: 'Domain MX active.' },
+        mailboxLevel: {
+          status: 'nonexistent',
+          details: 'Mailbox verification service confirmed recipient mailbox does not exist.',
+          isGuaranteed: false,
+        },
+        deliveryConfirmation: {
+          status: 'hard_bounce',
+          confirmedByDeliveryEvent: false,
+          details: 'Mailbox rejected.',
+        },
+      },
+      status: 'placeholder_rejected',
+      eligibleForOutreach: false,
+      rejectionReason: 'Mailbox verification service confirmed recipient mailbox does not exist.',
+      checkedAt: now,
+      deliverabilityDisclaimer: DELIVERABILITY_DISCLAIMER,
+    };
+  }
+
+  // Source Provenance Check
+  const hasCredibleSource = isCredibleEmailSourceUrl(sourceUrl);
+  if (!hasCredibleSource) {
     return {
       email: cleanEmail,
       isValidSyntax: true,
       hasMxRecords: true,
       isSuppressed: false,
       isPlaceholderOrGuess: true,
+      tiers: {
+        syntax: { passed: true, details: 'Syntax passed RFC test.' },
+        domainMx: { passed: true, domain, mxCount, details: `Domain '${domain}' has valid MX servers.` },
+        mailboxLevel: {
+          status: 'unknown',
+          details: 'Domain exists, but email lacks credible public website proof. Cannot assume mailbox exists.',
+          isGuaranteed: false,
+        },
+        deliveryConfirmation: {
+          status: 'unattempted',
+          confirmedByDeliveryEvent: false,
+          details: 'Unattempted.',
+        },
+      },
       status: 'missing',
       eligibleForOutreach: false,
-      rejectionReason: 'Email was not discovered on a credible public website or verified contact page. Unsupported guesses are prohibited.',
+      rejectionReason:
+        'Email was not discovered on a credible public website or verified contact page. Unsupported guesses and unverified unknown mailboxes are prohibited.',
       sourceUrl,
       checkedAt: now,
+      deliverabilityDisclaimer: DELIVERABILITY_DISCLAIMER,
     };
   }
 
-  // 6. Qualified & eligible: Publicly Sourced and MX Checked
-  // Note: An active MX record confirms domain mail handling, but does not prove the specific mailbox exists.
+  // If external verification returned "unknown", we do NOT assume it is valid!
+  // It is eligible only if supported by credible public source provenance, and flagged with status 'mailbox_unknown'
+  const isMailboxUnknown = externalMailboxStatus === 'unknown';
+
   return {
     email: cleanEmail,
     isValidSyntax: true,
     hasMxRecords: true,
     isSuppressed: false,
     isPlaceholderOrGuess: false,
-    status: 'publicly_sourced_and_mx_checked',
+    tiers: {
+      syntax: { passed: true, details: 'Syntax passed RFC 5322 validation.' },
+      domainMx: {
+        passed: true,
+        domain,
+        mxCount,
+        details: `Active MX mail exchange verified with ${mxCount} host(s).`,
+      },
+      mailboxLevel: {
+        status: isMailboxUnknown ? 'unknown' : 'verified_public_listing',
+        details: isMailboxUnknown
+          ? 'Mailbox existence cannot be guaranteed (verification returned unknown). Domain MX active, public source verified.'
+          : 'Discovered on verified public business contact page with active MX records.',
+        isGuaranteed: false, // Rule 10: Never claim email verifier can guarantee inbox delivery
+      },
+      deliveryConfirmation: {
+        status: 'unattempted',
+        confirmedByDeliveryEvent: false,
+        details: 'Not yet dispatched. Inbox delivery can only be confirmed upon receiving downstream delivery events.',
+      },
+    },
+    status: isMailboxUnknown ? 'mailbox_unknown' : 'publicly_sourced_and_mx_checked',
     eligibleForOutreach: true,
     sourceUrl,
     checkedAt: now,
+    deliverabilityDisclaimer: DELIVERABILITY_DISCLAIMER,
   };
 }
 

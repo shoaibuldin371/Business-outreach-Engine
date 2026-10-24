@@ -101,10 +101,61 @@ export async function addToSuppressionList(
   return true;
 }
 
+export interface ReverificationProof {
+  verifiedBy: string;
+  proofUrlOrEvidence: string;
+  notes?: string;
+  verifiedAt?: string;
+}
+
+/**
+ * Safely resolves a suppressed address ONLY with verified independent reverification proof.
+ * Addresses cannot be emailed again unless independent evidence confirms mailbox existence.
+ */
+export async function resolveSuppressionStatus(
+  email: string,
+  proof: ReverificationProof
+): Promise<{ success: boolean; error?: string }> {
+  if (!email || typeof email !== 'string') {
+    return { success: false, error: 'Valid recipient email required.' };
+  }
+  if (!proof || !proof.verifiedBy || !proof.proofUrlOrEvidence) {
+    return {
+      success: false,
+      error: 'Suppression resolution requires verified independent evidence (verifiedBy and proofUrlOrEvidence). Never unsuppress without proof.',
+    };
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
+  localSuppressedEmails.delete(cleanEmail);
+
+  const sb = getClient();
+  if (sb) {
+    try {
+      await sb.from('suppression_list').delete().eq('email', cleanEmail);
+      await sb
+        .from('business_leads')
+        .update({
+          status: 'pending_approval',
+          email_verification_status: 'publicly_sourced_and_mx_checked',
+          notes: `[SUPPRESSION RESOLVED via ${proof.verifiedBy}]: Reverified with proof '${proof.proofUrlOrEvidence}'. ${proof.notes || ''}`.trim(),
+        })
+        .eq('email', cleanEmail);
+    } catch (err) {
+      console.warn('resolveSuppressionStatus db warning:', err);
+    }
+  }
+
+  return { success: true };
+}
+
 /**
  * Removes an email from suppression list if independently verified by administrator
  */
-export async function removeFromSuppressionList(email: string): Promise<boolean> {
+export async function removeFromSuppressionList(
+  email: string,
+  proof?: ReverificationProof
+): Promise<boolean> {
   if (!email || typeof email !== 'string') return false;
 
   const cleanEmail = email.trim().toLowerCase();

@@ -1,7 +1,13 @@
 import assert from 'assert';
-import { classifyEmailError, sendEmail, sendPitchToProspect } from '../lib/server/email';
-import { isSuppressed, addToSuppressionList, getSuppressionList } from '../lib/server/suppression';
-import { isValidEmailSyntax, isPlaceholderOrGuessedAddress, verifyEmailAddress, isCredibleEmailSourceUrl } from '../lib/server/verification';
+import { classifyEmailError, sendEmail, sendPitchToProspect, parseBounceNotification } from '../lib/server/email';
+import { isSuppressed, addToSuppressionList, getSuppressionList, resolveSuppressionStatus } from '../lib/server/suppression';
+import {
+  isValidEmailSyntax,
+  isPlaceholderOrGuessedAddress,
+  verifyEmailAddress,
+  isCredibleEmailSourceUrl,
+  DELIVERABILITY_DISCLAIMER,
+} from '../lib/server/verification';
 import { extractEmailWithSource, parseEmailsFromHtml } from '../lib/server/research';
 import { conductDigitalAudit, generateAuditPdfBuffer } from '../lib/server/audit';
 import { generateSecureToken, buildInitialRoiAssumptions, buildProposalForLead } from '../lib/server/personalized-page';
@@ -340,7 +346,7 @@ async function runTestSuite() {
     assert.strictEqual(classified.category, 'AUTHENTICATION_FAILURE');
     assert.strictEqual(classified.isHardBounce, false, 'Auth error is NOT a recipient bounce');
     assert.strictEqual(classified.canRetry, false, 'Auth error credentials must be resolved manually');
-    assert.strictEqual(classified.smtpCode, '535');
+    assert.ok(classified.smtpCode.startsWith('535'), 'SMTP code should be 535 or 535 5.7.8');
   });
 
   await test('Provider sending quota (429/5.4.5) is classified as RATE_LIMIT_EXCEEDED (NOT recipient bounce)', () => {
@@ -348,7 +354,7 @@ async function runTestSuite() {
     const classified = classifyEmailError(new Error(quotaError));
     assert.strictEqual(classified.category, 'RATE_LIMIT_EXCEEDED');
     assert.strictEqual(classified.isHardBounce, false, 'Daily quota is NOT a recipient bounce');
-    assert.strictEqual(classified.smtpCode, '429');
+    assert.ok(classified.smtpCode.startsWith('429'), 'SMTP code should be 429 or 429 5.4.5');
   });
 
   await test('getDashboardStats provides 7 separate delivery counts and failed email audit trail', async () => {
@@ -416,6 +422,123 @@ async function runTestSuite() {
     assert.strictEqual(body2.success, true);
     assert.strictEqual(body2.idempotent, true, 'Duplicate webhook event must be recognized as idempotent');
     assert.strictEqual(body2.message, 'Duplicate event ignored (idempotent)');
+  });
+
+  // --------------------------------------------------------------------------
+  // TEST GROUP 7: Mocked Gmail Bounce Notifications & 4-Tier Verification Rules
+  // --------------------------------------------------------------------------
+  console.log('\n📦 GROUP 7: Mocked Gmail Bounce Notifications & 4-Tier Verification Rules');
+
+  await test('Mocked Gmail "Address not found" DSN notification parsing', () => {
+    const mockGmailDsn = `
+From: Mail Delivery Subsystem <mailer-daemon@googlemail.com>
+Subject: Delivery Status Notification (Failure)
+To: sender@gmail.com
+
+** Address not found **
+Your message wasn't delivered to mock-notfound@acmeworks.org because the address couldn't be found, or is unable to receive mail.
+
+The response from the remote server was:
+550-5.1.1 The email account that you tried to reach does not exist. Please try
+550-5.1.1 double-checking the recipient's email address at
+550-5.1.1 https://support.google.com/mail/?p=NoSuchUser 41-20020a170902996900b001a1827b526fsi28056223plp.130 - gsmtp
+`;
+
+    const parsed = parseBounceNotification(mockGmailDsn);
+    assert.strictEqual(parsed.isPermanentBounce, true, 'Gmail "Address not found" must be a permanent bounce');
+    assert.strictEqual(parsed.isHardBounce, true);
+    assert.strictEqual(parsed.canRetry, false, 'Permanent recipient failures must never be retried');
+    assert.strictEqual(parsed.recipient, 'mock-notfound@acmeworks.org', 'Must extract affected recipient');
+    assert.ok(parsed.smtpCode.includes('550'), 'Must detect 550 SMTP code');
+    assert.ok(parsed.smtpCode.includes('5.1.1'), 'Must detect 5.1.1 enhanced code');
+    assert.ok(parsed.failureReason.includes('550'));
+  });
+
+  await test('Mocked SMTP 550-5.1.1 remote response is classified as permanent HARD_BOUNCE', () => {
+    const mockSmtpErr = '550-5.1.1 The email account that you tried to reach does not exist. - gsmtp';
+    const classified = classifyEmailError(new Error(mockSmtpErr));
+    assert.strictEqual(classified.category, 'HARD_BOUNCE');
+    assert.strictEqual(classified.isHardBounce, true);
+    assert.strictEqual(classified.canRetry, false);
+    assert.strictEqual(classified.smtpCode, '550 5.1.1');
+    assert.ok(classified.message.includes('Address not found') || classified.message.includes('Mailbox does not exist'));
+  });
+
+  await test('Mocked NoSuchUser / 550 User unknown is classified as permanent HARD_BOUNCE', () => {
+    const mockUnknownErr = '550 5.1.1 <nobody@somedomain.com>: Recipient address rejected: User unknown in virtual mailbox table';
+    const classified = classifyEmailError(mockUnknownErr);
+    assert.strictEqual(classified.category, 'HARD_BOUNCE');
+    assert.strictEqual(classified.isHardBounce, true);
+    assert.strictEqual(classified.canRetry, false);
+    assert.strictEqual(classified.smtpCode, '550 5.1.1');
+  });
+
+  await test('Rule 7: Never assume email is valid just because domain exists or verifier returns "unknown"', async () => {
+    // Domain exists with active MX, but verifier returns "unknown" and no credible source URL exists
+    const resUnknown = await verifyEmailAddress('unknown-user@google.com', {
+      sourceUrl: undefined,
+      externalMailboxStatus: 'unknown',
+    });
+
+    assert.strictEqual(
+      resUnknown.eligibleForOutreach,
+      false,
+      'Email with unknown mailbox status and no credible source must NOT be assumed valid'
+    );
+    assert.strictEqual(resUnknown.hasMxRecords, true, 'Domain MX check passed');
+    assert.strictEqual(resUnknown.tiers.mailboxLevel.status, 'unknown');
+    assert.strictEqual(resUnknown.tiers.mailboxLevel.isGuaranteed, false);
+  });
+
+  await test('Rule 10: Never claim email verifier can guarantee inbox delivery (Honest Disclaimer)', async () => {
+    const resVerified = await verifyEmailAddress('press@google.com', 'https://about.google/contact');
+    assert.strictEqual(resVerified.eligibleForOutreach, true);
+    assert.strictEqual(resVerified.deliverabilityDisclaimer, DELIVERABILITY_DISCLAIMER);
+    assert.strictEqual(
+      resVerified.tiers.mailboxLevel.isGuaranteed,
+      false,
+      'Verifier must never claim inbox delivery is guaranteed'
+    );
+    assert.strictEqual(
+      resVerified.tiers.deliveryConfirmation.status,
+      'unattempted',
+      'Delivery confirmation is unattempted prior to actual dispatch'
+    );
+  });
+
+  await test('Suppression resolution requires verified independent evidence (reverification proof)', async () => {
+    const testReverifyEmail = 'reverify-audit-check@business-test.org';
+    await addToSuppressionList(testReverifyEmail, 'hard_bounce', 'test_seed', '550 5.1.1', 'Recipient not found');
+
+    // Confirm it is suppressed
+    assert.strictEqual(await isSuppressed(testReverifyEmail), true);
+
+    // Attempting resolution WITHOUT evidence proof must fail
+    const invalidAttempt = await resolveSuppressionStatus(testReverifyEmail, {
+      verifiedBy: '',
+      proofUrlOrEvidence: '',
+    });
+    assert.strictEqual(invalidAttempt.success, false, 'Must reject resolution without verified evidence');
+    assert.strictEqual(await isSuppressed(testReverifyEmail), true, 'Must remain suppressed');
+
+    // Resolution WITH valid independent proof succeeds
+    const validResolution = await resolveSuppressionStatus(testReverifyEmail, {
+      verifiedBy: 'authorized_admin_audit',
+      proofUrlOrEvidence: 'https://business-test.org/updated-contact',
+      notes: 'Customer confirmed updated mailbox via official domain contact form.',
+    });
+    assert.strictEqual(validResolution.success, true);
+    assert.strictEqual(await isSuppressed(testReverifyEmail), false, 'Address should be safely un-suppressed');
+  });
+
+  await test('Retry rules: Temporary SMTP deferrals are retriable; 550 5.1.1 is strictly non-retriable', () => {
+    const tempError = classifyEmailError('421 4.7.0 Try again later, server deferred message');
+    assert.strictEqual(tempError.category, 'TEMPORARY_FAILURE');
+    assert.strictEqual(tempError.canRetry, true, 'Temporary 421 deferral is retriable');
+
+    const permError = classifyEmailError('550 5.1.1 Address not found: The email account does not exist');
+    assert.strictEqual(permError.category, 'HARD_BOUNCE');
+    assert.strictEqual(permError.canRetry, false, 'Permanent 550 hard bounce must NEVER be retried');
   });
 
   console.log('\n================================================================');

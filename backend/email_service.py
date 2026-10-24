@@ -92,8 +92,13 @@ class EmailService:
             return "RATE_LIMIT_EXCEEDED", "Provider sending limit exceeded: Gmail allows up to 500 emails/day. Pause campaign."
         
         # 3. Invalid Recipient / Mailbox Does Not Exist (Hard Bounce)
-        if "550" in err_str or "5.1.1" in err_str or "5.4.1" in err_str or "recipient rejected" in err_lower or "user unknown" in err_lower or "mailbox not found" in err_lower:
-            return "INVALID_RECIPIENT", f"Recipient address rejected by remote mail server (550 Hard Bounce): {err_str}"
+        if (
+            "550" in err_str or "5.1.1" in err_str or "5.4.1" in err_str or 
+            "address not found" in err_lower or "does not exist" in err_lower or
+            "nosuchuser" in err_lower or "recipient rejected" in err_lower or 
+            "user unknown" in err_lower or "mailbox not found" in err_lower
+        ):
+            return "INVALID_RECIPIENT", f"Recipient address rejected by remote mail server (550 Hard Bounce: Address not found / Mailbox does not exist): {err_str}"
         
         # 4. Message Rejected / Spamhaus / DMARC
         if "554" in err_str or "5.7.1" in err_str or "spam" in err_lower or "dmarc" in err_lower or "blocked" in err_lower:
