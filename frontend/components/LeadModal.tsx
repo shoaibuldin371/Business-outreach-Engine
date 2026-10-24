@@ -24,7 +24,9 @@ import {
   Code2,
   Cloud,
   BarChart3,
-  GraduationCap
+  GraduationCap,
+  FileText,
+  Layout
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -356,6 +358,72 @@ export default function LeadModal({ lead, onClose, onActionComplete }: LeadModal
                 placeholder="Enter verified email (e.g. contact@business.com)"
                 className="w-full px-2.5 py-1.5 text-xs font-mono bg-slate-900 border border-white/10 rounded-lg text-emerald-400 font-semibold focus:outline-none focus:border-indigo-500"
               />
+            </div>
+          </div>
+
+          {/* Bounce & Suppression Notice */}
+          {(lead.status === 'bounced' || lead.email_verification_status === 'bounced' || lead.email_verification_status === 'suppressed') && (
+            <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-2.5">
+              <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <div className="font-bold text-rose-200">550 5.1.1 Hard Bounce Detected — Recipient Suppressed</div>
+                <p className="text-[11px] text-rose-300/90 leading-relaxed">
+                  The mail server reported that this mailbox does not exist. This address has been automatically recorded in the suppression list to preserve sender domain reputation and protect against CAN-SPAM violations. Automatic retries are permanently blocked.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Deliverables: PDF Audit & Client Portal */}
+          <div className="p-3.5 rounded-xl bg-gradient-to-r from-indigo-950/40 to-slate-900/60 border border-indigo-500/20 space-y-2.5">
+            <div className="flex items-center justify-between text-xs font-semibold text-slate-200">
+              <span className="flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                Verified Deliverables & Client Assets:
+              </span>
+              <span className="text-[10px] text-indigo-300 font-medium bg-indigo-500/10 px-2 py-0.5 rounded-full border border-indigo-500/20">
+                Laptop-Independent Cloud
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {/* 1. PDF Audit */}
+              <a
+                href={`/api/leads/${lead.id}/audit/pdf`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between p-2.5 rounded-lg bg-black/30 border border-white/10 hover:border-emerald-500/40 hover:bg-emerald-500/[0.04] transition-all text-xs group"
+              >
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <div>
+                    <div className="font-semibold text-slate-200 group-hover:text-emerald-300 transition-colors">
+                      1-Page Executive PDF Audit
+                    </div>
+                    <div className="text-[10px] text-slate-400">Pure Vector PDF • Serverless Ready</div>
+                  </div>
+                </div>
+                <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-400 transition-colors" />
+              </a>
+
+              {/* 2. Client Personalized Portal */}
+              <a
+                href={`/p/${lead.page_token || lead.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between p-2.5 rounded-lg bg-black/30 border border-white/10 hover:border-sky-500/40 hover:bg-sky-500/[0.04] transition-all text-xs group"
+              >
+                <div className="flex items-center gap-2">
+                  <Layout className="w-4 h-4 text-sky-400 shrink-0" />
+                  <div>
+                    <div className="font-semibold text-slate-200 group-hover:text-sky-300 transition-colors">
+                      Personalized Client Portal
+                    </div>
+                    <div className="text-[10px] text-slate-400">Unguessable Token • Interactive ROI</div>
+                  </div>
+                </div>
+                <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-sky-400 transition-colors" />
+              </a>
             </div>
           </div>
 

@@ -307,3 +307,182 @@ export async function verifyBusinessWebsite(
     },
   };
 }
+
+import { isSuppressed } from './suppression';
+
+export interface EmailVerificationDetail {
+  email: string;
+  isValidSyntax: boolean;
+  hasMxRecords: boolean;
+  isSuppressed: boolean;
+  isPlaceholderOrGuess: boolean;
+  status:
+    | 'publicly_sourced_and_mx_checked'
+    | 'syntax_and_mx_verified'
+    | 'bounced'
+    | 'suppressed'
+    | 'invalid_syntax'
+    | 'missing_mx'
+    | 'placeholder_rejected'
+    | 'missing';
+  eligibleForOutreach: boolean;
+  rejectionReason?: string;
+  sourceUrl?: string;
+  checkedAt: string;
+}
+
+const RFC_EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
+
+const PLACEHOLDER_DOMAINS = new Set([
+  'example.com',
+  'domain.com',
+  'business.com',
+  'yourdomain.com',
+  'company.com',
+  'website.com',
+  'placeholder.com',
+  'site.com',
+  'test.com',
+  'local',
+  'invalid',
+]);
+
+export function isValidEmailSyntax(email: string): boolean {
+  if (!email || typeof email !== 'string') return false;
+  const trimmed = email.trim();
+  if (trimmed.length > 254 || trimmed.length < 5) return false;
+  if (!RFC_EMAIL_REGEX.test(trimmed)) return false;
+  if (trimmed.includes('..')) return false;
+  return true;
+}
+
+export function isPlaceholderOrGuessedAddress(email: string): boolean {
+  if (!email) return true;
+  const lower = email.trim().toLowerCase();
+  const parts = lower.split('@');
+  if (parts.length !== 2) return true;
+  const [localPart, domain] = parts;
+
+  if (PLACEHOLDER_DOMAINS.has(domain) || domain.endsWith('.local') || domain.endsWith('.invalid')) {
+    return true;
+  }
+
+  // Reject generic test usernames
+  if (['user', 'username', 'email', 'yourname', 'test', 'sample', 'placeholder'].includes(localPart)) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Rigorously verifies an email address prior to outreach.
+ * Distinguishes syntax validation, DNS MX resolution, suppression checks, and source provenance.
+ * Transparently acknowledges that MX verification does NOT guarantee mailbox existence.
+ */
+export async function verifyEmailAddress(
+  email: string | undefined,
+  sourceUrl?: string
+): Promise<EmailVerificationDetail> {
+  const now = new Date().toISOString();
+
+  if (!email || !email.trim()) {
+    return {
+      email: '',
+      isValidSyntax: false,
+      hasMxRecords: false,
+      isSuppressed: false,
+      isPlaceholderOrGuess: false,
+      status: 'missing',
+      eligibleForOutreach: false,
+      rejectionReason: 'No email address provided or discovered.',
+      checkedAt: now,
+    };
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
+
+  // 1. Syntax Check
+  if (!isValidEmailSyntax(cleanEmail)) {
+    return {
+      email: cleanEmail,
+      isValidSyntax: false,
+      hasMxRecords: false,
+      isSuppressed: false,
+      isPlaceholderOrGuess: false,
+      status: 'invalid_syntax',
+      eligibleForOutreach: false,
+      rejectionReason: 'Email syntax fails RFC standards.',
+      checkedAt: now,
+    };
+  }
+
+  // 2. Placeholder Check
+  if (isPlaceholderOrGuessedAddress(cleanEmail)) {
+    return {
+      email: cleanEmail,
+      isValidSyntax: true,
+      hasMxRecords: false,
+      isSuppressed: false,
+      isPlaceholderOrGuess: true,
+      status: 'placeholder_rejected',
+      eligibleForOutreach: false,
+      rejectionReason: 'Address is a placeholder, dummy domain, or unsubstantiated guess.',
+      checkedAt: now,
+    };
+  }
+
+  // 3. Suppression & Hard-Bounce Check
+  const suppressed = await isSuppressed(cleanEmail);
+  if (suppressed) {
+    return {
+      email: cleanEmail,
+      isValidSyntax: true,
+      hasMxRecords: true,
+      isSuppressed: true,
+      isPlaceholderOrGuess: false,
+      status: 'suppressed',
+      eligibleForOutreach: false,
+      rejectionReason: 'Address is permanently suppressed due to prior hard bounce (550 5.1.1) or opt-out.',
+      checkedAt: now,
+    };
+  }
+
+  // 4. DNS MX Check
+  const domain = cleanEmail.split('@')[1];
+  let hasMx = false;
+  try {
+    const mxRecords = await dnsPromises.resolveMx(domain);
+    hasMx = Array.isArray(mxRecords) && mxRecords.length > 0;
+  } catch {
+    hasMx = false;
+  }
+
+  if (!hasMx) {
+    return {
+      email: cleanEmail,
+      isValidSyntax: true,
+      hasMxRecords: false,
+      isSuppressed: false,
+      isPlaceholderOrGuess: false,
+      status: 'missing_mx',
+      eligibleForOutreach: false,
+      rejectionReason: `Domain '${domain}' has no active mail exchange (MX) servers on the internet.`,
+      checkedAt: now,
+    };
+  }
+
+  // 5. Qualified & eligible
+  return {
+    email: cleanEmail,
+    isValidSyntax: true,
+    hasMxRecords: true,
+    isSuppressed: false,
+    isPlaceholderOrGuess: false,
+    status: sourceUrl ? 'publicly_sourced_and_mx_checked' : 'syntax_and_mx_verified',
+    eligibleForOutreach: true,
+    sourceUrl,
+    checkedAt: now,
+  };
+}
+

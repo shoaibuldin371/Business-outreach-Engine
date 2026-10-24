@@ -7,6 +7,8 @@ export type LeadStatus =
   | 'delivered'
   | 'bounced'
   | 'failed'
+  | 'failed_permanently'
+  | 'suppressed'
   | 'reply_received'
   | 'rejected'
   | 'missing_contact'
@@ -28,6 +30,8 @@ export type EmailDeliveryStatus =
   | 'delivered'
   | 'bounced'
   | 'failed'
+  | 'failed_permanently'
+  | 'suppressed'
   | 'reply_received'
   | 'rejected';
 
@@ -47,9 +51,13 @@ export type DemandSignalType =
   | 'weak_signal';
 
 export type EmailVerificationStatus =
+  | 'publicly_sourced_and_mx_checked'
   | 'syntax_and_mx_verified'
   | 'syntax_verified'
   | 'deliverable'
+  | 'bounced'
+  | 'suppressed'
+  | 'invalid_recipient'
   | 'unverified'
   | 'missing';
 
@@ -67,6 +75,8 @@ export type ReplyClassification =
   | 'follow_up_later'
   | 'unsubscribe'
   | 'unknown';
+
+export type LeadPriority = 'high' | 'medium' | 'low' | 'needs_review';
 
 export interface ScoreBreakdown {
   signal_strength: number;
@@ -91,6 +101,8 @@ export interface BusinessLead {
   address?: string;
   phone?: string;
   email?: string;
+  email_source_url?: string;
+  email_discovered_at?: string;
   email_verification_status?: EmailVerificationStatus;
   website?: string;
   website_status?: string;
@@ -100,6 +112,12 @@ export interface BusinessLead {
   evidence_url?: string;
   research_status?: 'pending' | 'in_progress' | 'completed' | 'failed';
   status: LeadStatus;
+  priority_level?: LeadPriority;
+  priority_reason?: string;
+  has_audit?: boolean;
+  has_personalized_page?: boolean;
+  audit_id?: string;
+  page_token?: string;
   rejection_reason?: string;
   notes?: string;
   email_subject?: string;
@@ -110,6 +128,115 @@ export interface BusinessLead {
   reply_classification?: ReplyClassification;
   created_at: string;
   updated_at: string;
+}
+
+export interface LeadSignal {
+  id: string;
+  lead_id: string;
+  signal_type: 'explicit_demand' | 'evidence_backed' | 'job_opening' | 'expansion_announcement' | 'website_opportunity' | 'operational_challenge';
+  signal_source: string;
+  source_url?: string;
+  evidence_excerpt: string;
+  confidence_score: number;
+  metadata?: Record<string, any>;
+  detected_at: string;
+}
+
+export interface DigitalAuditFindings {
+  target_url?: string;
+  has_website: boolean;
+  is_https: boolean;
+  status_code?: number;
+  response_time_ms?: number;
+  title?: string;
+  meta_description?: string;
+  has_mobile_viewport: boolean;
+  has_lead_form: boolean;
+  has_booking_flow: boolean;
+  broken_links_detected?: number;
+  identified_gaps: string[];
+  opportunities: string[];
+  estimated_monthly_value?: string;
+}
+
+export interface DigitalAudit {
+  id: string;
+  lead_id: string;
+  target_url?: string;
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'no_website';
+  findings: DigitalAuditFindings;
+  recommendations: string[];
+  pdf_path?: string;
+  audit_date: string;
+  created_at: string;
+}
+
+export interface RoiAssumptions {
+  hours_saved_per_week: number;
+  hourly_rate_usd: number;
+  inquiries_automated_monthly: number;
+  conversion_lift_percent: number;
+  estimated_monthly_value_usd: number;
+  disclaimer: string;
+}
+
+export interface PersonalizedProposal {
+  headline: string;
+  summary: string;
+  core_deliverables: string[];
+  recommended_service: ServiceCategory;
+  evidence_quote: string;
+  roi_assumptions: RoiAssumptions;
+}
+
+export interface PersonalizedPage {
+  id: string;
+  lead_id: string;
+  token: string;
+  is_active: boolean;
+  expires_at: string;
+  custom_proposal: PersonalizedProposal;
+  roi_assumptions: RoiAssumptions;
+  visit_count: number;
+  last_visited_at?: string;
+  revoked_at?: string;
+  created_at: string;
+}
+
+export interface SuppressionEntry {
+  id: string;
+  email: string;
+  domain?: string;
+  reason: 'user_opt_out' | 'hard_bounce' | 'manual_suppress' | 'complaint';
+  source: string;
+  smtp_error_code?: string;
+  diagnostic_message?: string;
+  created_at: string;
+}
+
+export interface OutreachEvent {
+  id: string;
+  lead_id: string;
+  page_id?: string;
+  event_type: 'email_sent' | 'provider_accepted' | 'delivered' | 'bounced' | 'page_viewed' | 'roi_calculated' | 'meeting_requested' | 'opt_out' | 'replied';
+  channel: 'email' | 'landing_page' | 'direct';
+  payload?: Record<string, any>;
+  created_at: string;
+}
+
+export interface BackgroundJob {
+  id: string;
+  job_type: 'discovery_scan' | 'digital_audit' | 'page_generation' | 'email_dispatch';
+  status: 'pending' | 'claimed' | 'running' | 'completed' | 'failed';
+  payload?: Record<string, any>;
+  result?: Record<string, any>;
+  error_message?: string;
+  retry_count: number;
+  max_retries: number;
+  scheduled_at: string;
+  started_at?: string;
+  completed_at?: string;
+  created_at: string;
 }
 
 export interface LeadResearch {
@@ -243,6 +370,11 @@ export interface AutomationSettings {
   admin_notification_email: string;
   require_email_found: boolean;
   require_manual_approval: boolean;
+  search_cursor?: {
+    state_index: number;
+    category_index: number;
+    offset: number;
+  };
   updated_at: string;
 }
 

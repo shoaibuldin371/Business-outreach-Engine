@@ -138,6 +138,45 @@ export default function DeliverabilityCard() {
       )}
 
       {/* Deliverability Telemetry Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="p-3.5 rounded-xl bg-slate-900/60 border border-white/5 space-y-1">
+          <div className="text-[11px] text-slate-400 font-medium">Emails Queued</div>
+          <div className="text-xl font-black text-slate-200">{metrics?.emails_queued ?? 0}</div>
+          <div className="text-[10px] text-slate-400">Ready for dispatch</div>
+        </div>
+
+        <div className="p-3.5 rounded-xl bg-slate-900/60 border border-white/5 space-y-1">
+          <div className="text-[11px] text-indigo-400 font-medium">Provider Accepted</div>
+          <div className="text-xl font-black text-indigo-300">{metrics?.total_accepted ?? 0}</div>
+          <div className="text-[10px] text-slate-400">SMTP 250 OK accepted</div>
+        </div>
+
+        <div className="p-3.5 rounded-xl bg-slate-900/60 border border-white/5 space-y-1">
+          <div className="text-[11px] text-emerald-400 font-medium">Confirmed Delivered</div>
+          <div className="text-xl font-black text-emerald-400">{metrics?.confirmed_delivered ?? 0}</div>
+          <div className="text-[10px] text-slate-400">Verified receipt events</div>
+        </div>
+
+        <div className="p-3.5 rounded-xl bg-slate-900/60 border border-white/5 space-y-1">
+          <div className="text-[11px] text-rose-400 font-medium">Hard Bounces</div>
+          <div className="text-xl font-black text-rose-400">{metrics?.bounced_count ?? 0}</div>
+          <div className="text-[10px] text-slate-400">550 5.1.1 (Suppressed)</div>
+        </div>
+
+        <div className="p-3.5 rounded-xl bg-slate-900/60 border border-white/5 space-y-1">
+          <div className="text-[11px] text-amber-400 font-medium">Temp Failures</div>
+          <div className="text-xl font-black text-amber-300">{metrics?.temporary_failures_count ?? 0}</div>
+          <div className="text-[10px] text-slate-400">421/451 (Retryable)</div>
+        </div>
+
+        <div className="p-3.5 rounded-xl bg-slate-900/60 border border-white/5 space-y-1">
+          <div className="text-[11px] text-cyan-400 font-medium">Permanent Suppressed</div>
+          <div className="text-xl font-black text-cyan-300">{metrics?.suppression_list_size ?? 0}</div>
+          <div className="text-[10px] text-slate-400">0 automatic retries</div>
+        </div>
+      </div>
+
+      {/* Protocol Alignment & Google Limits */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* SPF & Sender Identity */}
         <div className="p-4 rounded-xl bg-slate-900/60 border border-white/5 space-y-2">
@@ -217,10 +256,63 @@ export default function DeliverabilityCard() {
             Safe Batch: 25-50 / Day
           </div>
           <p className="text-[10px] text-slate-400">
-            Suppressed addresses: <strong className="text-slate-200">{metrics?.suppression_list_size || 2}</strong> blocked from dispatch.
+            Suppressed addresses: <strong className="text-slate-200">{metrics?.suppression_list_size || 0}</strong> blocked from dispatch.
           </p>
         </div>
       </div>
+
+      {/* Suppression List Table */}
+      {metrics?.suppression_entries && metrics.suppression_entries.length > 0 && (
+        <div className="p-4 rounded-xl bg-[#080d1a] border border-white/5 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold text-slate-200 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-rose-500" />
+              Active Suppression List ({metrics.suppression_entries.length} addresses permanently blocked)
+            </h3>
+            <span className="text-[10px] text-slate-400">550 5.1.1 Hard Bounces & Opt-Outs</span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-white/5 text-[11px] text-slate-400">
+                  <th className="pb-2 font-medium">Suppressed Email</th>
+                  <th className="pb-2 font-medium">Reason</th>
+                  <th className="pb-2 font-medium">SMTP Diagnostic / Code</th>
+                  <th className="pb-2 font-medium">Source</th>
+                  <th className="pb-2 font-medium">Date</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5 text-slate-300">
+                {metrics.suppression_entries.map((entry: any) => (
+                  <tr key={entry.id || entry.email} className="hover:bg-white/[0.02]">
+                    <td className="py-2.5 font-mono text-cyan-400">{entry.email}</td>
+                    <td className="py-2.5">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                        entry.reason === 'hard_bounce'
+                          ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
+                          : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                      }`}>
+                        {entry.reason === 'hard_bounce' ? 'Hard Bounce' : 'Opt-Out'}
+                      </span>
+                    </td>
+                    <td className="py-2.5 text-slate-400 font-mono text-[11px] max-w-xs truncate" title={entry.diagnostic_message || entry.smtp_error_code}>
+                      {entry.smtp_error_code || '550 5.1.1'} {entry.diagnostic_message ? `— ${entry.diagnostic_message}` : ''}
+                    </td>
+                    <td className="py-2.5 text-slate-400 text-[11px]">{entry.source || 'smtp_bounce_550'}</td>
+                    <td className="py-2.5 text-slate-400 text-[11px]">
+                      {new Date(entry.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[10px] text-slate-400 italic">
+            * Addresses on this list will never receive automated outreach. To remove an address, administrators must manually verify the mailbox.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

@@ -22,7 +22,18 @@ export interface Lead {
   country?: string;
   phone?: string;
   email?: string;
-  email_verification_status?: 'syntax_and_mx_verified' | 'syntax_verified' | 'deliverable' | 'unverified' | 'missing';
+  email_source_url?: string;
+  email_discovered_at?: string;
+  email_verification_status?:
+    | 'publicly_sourced_and_mx_checked'
+    | 'syntax_and_mx_verified'
+    | 'syntax_verified'
+    | 'deliverable'
+    | 'bounced'
+    | 'suppressed'
+    | 'invalid_recipient'
+    | 'unverified'
+    | 'missing';
   website?: string;
   website_status?: string;
   score?: number;
@@ -39,6 +50,10 @@ export interface Lead {
   notes?: string;
   email_subject?: string;
   email_body?: string;
+  has_audit?: boolean;
+  has_personalized_page?: boolean;
+  audit_id?: string;
+  page_token?: string;
   status:
     | 'pending_approval'
     | 'approved'

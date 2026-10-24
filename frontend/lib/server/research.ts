@@ -58,7 +58,34 @@ async function checkDomainMx(domain: string): Promise<boolean> {
   }
 }
 
-export async function extractEmailFromWebsite(rawUrl: string): Promise<string | undefined> {
+import { isSuppressed } from './suppression';
+
+export function parseEmailsFromHtml(html: string): string[] {
+  const matches = html.match(EMAIL_REGEX) || [];
+  const results: string[] = [];
+  for (const m of matches) {
+    const lower = m.toLowerCase();
+    const domain = lower.split('@')[1];
+    if (
+      domain &&
+      !IGNORE_DOMAINS.includes(domain) &&
+      !domain.endsWith('.png') &&
+      !domain.endsWith('.jpg') &&
+      !domain.endsWith('.jpeg') &&
+      !domain.endsWith('.webp') &&
+      !domain.endsWith('.svg') &&
+      !lower.includes('shoaib') &&
+      !lower.includes('duckduckgo')
+    ) {
+      if (!results.includes(lower)) {
+        results.push(lower);
+      }
+    }
+  }
+  return results;
+}
+
+export async function extractEmailWithSource(rawUrl: string): Promise<{ email: string; sourceUrl: string } | undefined> {
   const cleanUrl = rawUrl.startsWith('http') ? rawUrl : `https://${rawUrl}`;
   const candidates = [cleanUrl];
 
@@ -85,25 +112,13 @@ export async function extractEmailFromWebsite(rawUrl: string): Promise<string | 
       if (!resp.ok) continue;
 
       const html = await resp.text();
-      const matches = html.match(EMAIL_REGEX) || [];
-      for (const m of matches) {
-        const lower = m.toLowerCase();
-        const domain = lower.split('@')[1];
-        if (
-          domain &&
-          !IGNORE_DOMAINS.includes(domain) &&
-          !domain.endsWith('.png') &&
-          !domain.endsWith('.jpg') &&
-          !domain.endsWith('.jpeg') &&
-          !domain.endsWith('.webp') &&
-          !domain.endsWith('.svg') &&
-          !lower.includes('shoaib') &&
-          !lower.includes('duckduckgo')
-        ) {
-          const hasMx = await checkDomainMx(domain);
-          if (hasMx) {
-            return lower;
-          }
+      const extractedEmails = parseEmailsFromHtml(html);
+      for (const email of extractedEmails) {
+        if (await isSuppressed(email)) continue;
+        const domain = email.split('@')[1];
+        const hasMx = await checkDomainMx(domain);
+        if (hasMx) {
+          return { email, sourceUrl: target };
         }
       }
     } catch {
@@ -112,6 +127,11 @@ export async function extractEmailFromWebsite(rawUrl: string): Promise<string | 
   }
 
   return undefined;
+}
+
+export async function extractEmailFromWebsite(rawUrl: string): Promise<string | undefined> {
+  const res = await extractEmailWithSource(rawUrl);
+  return res?.email;
 }
 
 /**
@@ -271,25 +291,28 @@ export async function conductBusinessResearch(
   let publicEmail = initialEmail?.trim() || '';
   let emailSourceUrl: string | undefined = undefined;
 
-  // Step A: If initial email was provided by directory/Overpass, verify MX
-  if (publicEmail) {
-    const domain = publicEmail.split('@')[1] || '';
-    const hasMx = await checkDomainMx(domain);
-    if (!hasMx) {
-      publicEmail = '';
-    } else {
-      emailSourceUrl = 'Verified Directory Listing';
+  // Step A: If candidate has a website, crawl it directly for public email with verified source URL
+  const websiteToCheck = audit?.checkedUrl || audit?.details?.redirectUrl;
+  if (websiteToCheck) {
+    const extracted = await extractEmailWithSource(websiteToCheck);
+    if (extracted && extracted.email) {
+      publicEmail = extracted.email;
+      emailSourceUrl = extracted.sourceUrl;
+      sourceUrls.push(extracted.sourceUrl);
     }
   }
 
-  // Step B: If candidate has a website, crawl it directly for public email
-  const websiteToCheck = audit?.checkedUrl || (audit?.details?.redirectUrl);
-  if (!publicEmail && websiteToCheck) {
-    const websiteEmail = await extractEmailFromWebsite(websiteToCheck);
-    if (websiteEmail) {
-      publicEmail = websiteEmail;
-      emailSourceUrl = websiteToCheck;
-      sourceUrls.push(websiteToCheck);
+  // Step B: If no email found on website and initial email provided, verify it strictly
+  if (!publicEmail && initialEmail) {
+    const candidateLower = initialEmail.trim().toLowerCase();
+    const isSupp = await isSuppressed(candidateLower);
+    if (!isSupp) {
+      const domain = candidateLower.split('@')[1] || '';
+      const hasMx = await checkDomainMx(domain);
+      if (hasMx) {
+        publicEmail = candidateLower;
+        emailSourceUrl = 'Verified Public Registry Listing';
+      }
     }
   }
 
@@ -298,9 +321,12 @@ export async function conductBusinessResearch(
   const socialProfiles = publicSearch.socialProfiles;
 
   if (!publicEmail && publicSearch.email) {
-    publicEmail = publicSearch.email;
-    emailSourceUrl = publicSearch.sourceUrl;
-    if (emailSourceUrl) sourceUrls.push(emailSourceUrl);
+    const isSupp = await isSuppressed(publicSearch.email);
+    if (!isSupp) {
+      publicEmail = publicSearch.email;
+      emailSourceUrl = publicSearch.sourceUrl;
+      if (emailSourceUrl) sourceUrls.push(emailSourceUrl);
+    }
   }
 
   // 2. Synthesize factual growth signals

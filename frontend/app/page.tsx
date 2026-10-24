@@ -42,7 +42,9 @@ import {
   Code2,
   Cloud,
   BarChart3,
-  GraduationCap
+  GraduationCap,
+  FileText,
+  Layout
 } from 'lucide-react';
 
 const TECHNICAL_SERVICES_SHOWCASE = [
@@ -594,7 +596,8 @@ export default function DashboardPage() {
                 const isRejected = lead.status === 'rejected';
                 const isPending = lead.status === 'pending_approval' || lead.status === 'draft_ready';
                 const isSent = lead.status === 'sent' || lead.status === 'approved' || lead.status === 'accepted_by_provider' || lead.status === 'delivered';
-                const isFailed = lead.status === 'error' || lead.status === 'failed' || lead.status === 'bounced';
+                const isBounced = lead.status === 'bounced' || lead.email_verification_status === 'bounced' || lead.email_verification_status === 'suppressed';
+                const isFailed = (lead.status === 'error' || lead.status === 'failed') && !isBounced;
 
                 return (
                   <div
@@ -634,6 +637,14 @@ export default function DashboardPage() {
                       {renderWebsiteBadge(lead)}
                     </div>
 
+                    {/* Hard Bounce Badge if detected */}
+                    {isBounced && (
+                      <div className="p-2 rounded-lg bg-rose-500/15 border border-rose-500/30 text-[11px] text-rose-300 flex items-center gap-2">
+                        <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                        <span className="font-bold">550 5.1.1 Hard Bounce</span> — Address Suppressed
+                      </div>
+                    )}
+
                     {/* Demand Evidence Snippet */}
                     {lead.demand_evidence && (
                       <div className="p-2.5 rounded-lg bg-indigo-500/[0.04] border border-indigo-500/15 text-[11px] text-slate-300 leading-relaxed">
@@ -665,6 +676,28 @@ export default function DashboardPage() {
                       )}
                     </div>
 
+                    {/* Deliverable quick links */}
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <a
+                        href={`/api/leads/${lead.id}/audit/pdf`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="py-1.5 px-2 rounded-lg bg-white/[0.03] hover:bg-white/[0.08] border border-white/5 text-slate-300 flex items-center justify-center gap-1 text-[11px] transition-colors"
+                      >
+                        <FileText className="w-3 h-3 text-emerald-400" />
+                        <span>PDF Audit</span>
+                      </a>
+                      <a
+                        href={`/p/${lead.page_token || lead.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="py-1.5 px-2 rounded-lg bg-white/[0.03] hover:bg-white/[0.08] border border-white/5 text-slate-300 flex items-center justify-center gap-1 text-[11px] transition-colors"
+                      >
+                        <Layout className="w-3 h-3 text-sky-400" />
+                        <span>Client Portal</span>
+                      </a>
+                    </div>
+
                     {/* Action buttons */}
                     <div className="pt-1 border-t border-white/5">
                       {isRejected ? (
@@ -680,7 +713,7 @@ export default function DashboardPage() {
                           onClick={() => setSelectedLead(lead)}
                           className="w-full py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10"
                         >
-                          {isSent ? 'View Sent Pitch' : isFailed ? 'View Delivery Error' : 'Review Pitch & Evidence'}
+                          {isBounced ? 'View Bounce Diagnostics' : isSent ? 'View Sent Pitch' : isFailed ? 'View Delivery Error' : 'Review Pitch & Evidence'}
                         </button>
                       )}
                     </div>
@@ -715,7 +748,8 @@ export default function DashboardPage() {
                     const isRejected = lead.status === 'rejected';
                     const isPending = lead.status === 'pending_approval' || lead.status === 'draft_ready';
                     const isSent = lead.status === 'sent' || lead.status === 'approved' || lead.status === 'accepted_by_provider' || lead.status === 'delivered';
-                    const isFailed = lead.status === 'error' || lead.status === 'failed' || lead.status === 'bounced';
+                    const isBounced = lead.status === 'bounced' || lead.email_verification_status === 'bounced' || lead.email_verification_status === 'suppressed';
+                    const isFailed = (lead.status === 'error' || lead.status === 'failed') && !isBounced;
 
                     return (
                       <tr key={lead.id} className="hover:bg-white/[0.02] transition-colors group">
@@ -767,6 +801,11 @@ export default function DashboardPage() {
 
                         {/* Outreach Status */}
                         <td className="py-3.5 px-4">
+                          {isBounced && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/30">
+                              <AlertTriangle className="w-3 h-3 shrink-0" /> 550 5.1.1 Hard Bounce
+                            </span>
+                          )}
                           {isPending && (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
                               <Clock className="w-3 h-3 shrink-0" /> Pending Review
@@ -797,24 +836,48 @@ export default function DashboardPage() {
                           <span className="text-[10px] text-slate-400">/100</span>
                         </td>
 
-                        {/* Actions */}
+                        {/* Actions & Deliverables */}
                         <td className="py-3.5 px-4 text-right">
-                          {isRejected ? (
-                            <Link
-                              href={`/custom-email?lead_id=${lead.id}`}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 transition-all"
+                          <div className="flex items-center justify-end gap-1.5">
+                            {/* PDF Audit Download Icon */}
+                            <a
+                              href={`/api/leads/${lead.id}/audit/pdf`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Download Executive 1-Page PDF Audit"
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-300 bg-white/5 hover:bg-emerald-500/10 border border-white/5 transition-colors"
                             >
-                              <Send className="w-3 h-3" />
-                              Custom
-                            </Link>
-                          ) : (
-                            <button
-                              onClick={() => setSelectedLead(lead)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors text-slate-200 bg-white/5 hover:bg-white/10 border border-white/10"
+                              <FileText className="w-3.5 h-3.5" />
+                            </a>
+
+                            {/* Client Portal Link Icon */}
+                            <a
+                              href={`/p/${lead.page_token || lead.id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Open Client Personalized Portal"
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-sky-300 bg-white/5 hover:bg-sky-500/10 border border-white/5 transition-colors"
                             >
-                              {isSent ? 'View Pitch' : isFailed ? 'View Error' : 'Review & Pitch'}
-                            </button>
-                          )}
+                              <Layout className="w-3.5 h-3.5" />
+                            </a>
+
+                            {isRejected ? (
+                              <Link
+                                href={`/custom-email?lead_id=${lead.id}`}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 transition-all"
+                              >
+                                <Send className="w-3 h-3" />
+                                Custom
+                              </Link>
+                            ) : (
+                              <button
+                                onClick={() => setSelectedLead(lead)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors text-slate-200 bg-white/5 hover:bg-white/10 border border-white/10"
+                              >
+                                {isBounced ? 'Bounce' : isSent ? 'View Pitch' : isFailed ? 'View Error' : 'Review'}
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );

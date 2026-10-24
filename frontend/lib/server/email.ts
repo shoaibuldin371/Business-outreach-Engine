@@ -12,9 +12,11 @@ import {
   isEmailAlreadySent,
   getAutomationSettings,
   updateLead,
+  getClient,
   BusinessLead,
 } from './supabase';
 import { sendEmailViaGmailApi, getValidGmailAccessToken } from './gmail-oauth';
+import { isSuppressed, addToSuppressionList } from './suppression';
 
 /**
  * Checks if a domain has active MX mail records on the internet
@@ -46,6 +48,7 @@ export async function verifyDomainHasMx(email: string): Promise<boolean> {
 
 // List of known rejected/non-existent recipient emails that returned 550 or hard bounces
 export const KNOWN_BOUNCED_OR_BLOCKED_EMAILS = new Set([
+  'info@unstructured.io',
   'contact@outbackroofing.com',
   'contact@.com',
 ]);
@@ -70,55 +73,119 @@ export function isBlockedOrBouncedEmail(email: string): boolean {
   return false;
 }
 
-export function classifyEmailError(err: any): { category: string; message: string } {
-  const str = String(err?.message || err || '');
+export interface ClassifiedEmailError {
+  category:
+    | 'HARD_BOUNCE'
+    | 'TEMPORARY_FAILURE'
+    | 'AUTHENTICATION_FAILURE'
+    | 'RATE_LIMIT_EXCEEDED'
+    | 'MESSAGE_REJECTED'
+    | 'TIMEOUT_OR_UNKNOWN';
+  isHardBounce: boolean;
+  canRetry: boolean;
+  smtpCode: string;
+  enhancedCode?: string;
+  message: string;
+  rawError: string;
+}
+
+export function classifyEmailError(err: any): ClassifiedEmailError {
+  const str = String(err?.message || err?.response || err || '');
   const lower = str.toLowerCase();
 
+  // 1. Permanent Recipient Failures (Hard Bounces)
+  // Specific checks for 550 5.1.1, NoSuchUser, User unknown, account does not exist
+  if (
+    lower.includes('550 5.1.1') ||
+    lower.includes('5.1.1') ||
+    lower.includes('nosuchuser') ||
+    lower.includes('user unknown') ||
+    lower.includes('does not exist') ||
+    lower.includes('account that you tried to reach does not exist') ||
+    lower.includes('recipient rejected') ||
+    lower.includes('mailbox unavailable') ||
+    lower.includes('no mailbox') ||
+    lower.includes('invalid recipient') ||
+    (lower.includes('550') && (lower.includes('unknown') || lower.includes('invalid') || lower.includes('not exist') || lower.includes('recipient')))
+  ) {
+    return {
+      category: 'HARD_BOUNCE',
+      isHardBounce: true,
+      canRetry: false,
+      smtpCode: '550 5.1.1',
+      enhancedCode: '5.1.1',
+      message: `Remote mail server rejected recipient (550 5.1.1 Hard Bounce: Mailbox does not exist): ${str}`,
+      rawError: str,
+    };
+  }
+
+  // 2. Authentication Failures
   if (lower.includes('535') || lower.includes('authentication') || lower.includes('badcredentials') || lower.includes('invalid credentials')) {
     return {
       category: 'AUTHENTICATION_FAILURE',
+      isHardBounce: false,
+      canRetry: false,
+      smtpCode: '535',
       message: 'SMTP/OAuth Authentication failed: Invalid username or App Password.',
+      rawError: str,
     };
   }
 
+  // 3. Provider Rate Limits / Quotas
   if (lower.includes('429') || lower.includes('5.4.5') || lower.includes('daily user sending limit') || lower.includes('quota')) {
     return {
       category: 'RATE_LIMIT_EXCEEDED',
+      isHardBounce: false,
+      canRetry: true,
+      smtpCode: '429',
       message: 'Provider daily sending limit reached (Gmail allows 500/day). Outreach paused to protect sender reputation.',
+      rawError: str,
     };
   }
 
-  if (lower.includes('550') || lower.includes('5.1.1') || lower.includes('5.4.1') || lower.includes('user unknown') || lower.includes('recipient rejected')) {
-    return {
-      category: 'INVALID_RECIPIENT',
-      message: `Remote mail server rejected recipient (550 Hard Bounce): ${str}`,
-    };
-  }
-
+  // 4. Content / Spam / DMARC Rejections
   if (lower.includes('554') || lower.includes('5.7.1') || lower.includes('spam') || lower.includes('dmarc') || lower.includes('blocked')) {
     return {
       category: 'MESSAGE_REJECTED',
+      isHardBounce: false,
+      canRetry: false,
+      smtpCode: '554 5.7.1',
       message: `Message rejected by spam policy or DMARC alignment: ${str}`,
+      rawError: str,
     };
   }
 
-  if (lower.includes('421') || lower.includes('451') || lower.includes('try again later') || lower.includes('service not available')) {
+  // 5. Temporary Server Issues
+  if (lower.includes('421') || lower.includes('450') || lower.includes('451') || lower.includes('452') || lower.includes('try again later') || lower.includes('service not available')) {
     return {
-      category: 'TEMPORARY_PROVIDER_ERROR',
+      category: 'TEMPORARY_FAILURE',
+      isHardBounce: false,
+      canRetry: true,
+      smtpCode: lower.includes('421') ? '421' : lower.includes('451') ? '451' : '450',
       message: `Temporary mail server issue: ${str}`,
+      rawError: str,
     };
   }
 
-  if (lower.includes('timeout') || lower.includes('timed out') || lower.includes('econnrefused')) {
+  // 6. Network Timeouts
+  if (lower.includes('timeout') || lower.includes('timed out') || lower.includes('econnrefused') || lower.includes('econnreset')) {
     return {
       category: 'TIMEOUT_OR_UNKNOWN',
+      isHardBounce: false,
+      canRetry: true,
+      smtpCode: 'TIMEOUT',
       message: `Connection timed out. Check existing send records before retrying to prevent duplicate emails.`,
+      rawError: str,
     };
   }
 
   return {
-    category: 'UNKNOWN_PROVIDER_ERROR',
+    category: 'TIMEOUT_OR_UNKNOWN',
+    isHardBounce: false,
+    canRetry: false,
+    smtpCode: 'UNKNOWN',
     message: str || 'Mail dispatch failed.',
+    rawError: str,
   };
 }
 
@@ -162,6 +229,8 @@ export async function sendEmail({
   providerMessageId?: string;
   message: string;
   errorCategory?: string;
+  smtpCode?: string;
+  isHardBounce?: boolean;
 }> {
   if (!to || !to.trim()) {
     return {
@@ -174,13 +243,15 @@ export async function sendEmail({
   }
 
   const normalizedTo = to.trim().toLowerCase();
-  if (isBlockedOrBouncedEmail(normalizedTo)) {
+  if (isBlockedOrBouncedEmail(normalizedTo) || (await isSuppressed(normalizedTo))) {
     return {
       success: false,
       status: 'bounced',
       provider: 'none',
       message: `Delivery permanently blocked: '${to}' is on the suppression list (550 Recipient rejected). Blocked to prevent Google Mailer-Daemon bounce notifications.`,
-      errorCategory: 'INVALID_RECIPIENT',
+      errorCategory: 'HARD_BOUNCE',
+      smtpCode: '550 5.1.1',
+      isHardBounce: true,
     };
   }
 
@@ -224,16 +295,25 @@ export async function sendEmail({
         message: 'Accepted by SMTP provider for delivery (SMTP 250 OK).',
       };
     } catch (e: any) {
-      const { category, message } = classifyEmailError(e);
-      if (category === 'INVALID_RECIPIENT') {
+      const classified = classifyEmailError(e);
+      if (classified.isHardBounce) {
         KNOWN_BOUNCED_OR_BLOCKED_EMAILS.add(normalizedTo);
+        await addToSuppressionList(
+          normalizedTo,
+          'hard_bounce',
+          'smtp_550_bounce',
+          classified.smtpCode,
+          classified.message
+        );
       }
       return {
         success: false,
-        status: category === 'INVALID_RECIPIENT' ? 'bounced' : 'failed',
+        status: classified.isHardBounce ? 'bounced' : 'failed',
         provider: 'smtp',
-        message,
-        errorCategory: category,
+        message: classified.message,
+        errorCategory: classified.category,
+        smtpCode: classified.smtpCode,
+        isHardBounce: classified.isHardBounce,
       };
     }
   }
@@ -341,9 +421,17 @@ Open Pipeline Dashboard: ${dashboardUrl}`;
   return sendRes;
 }
 
-export function formatOutreachHtml(body: string, senderName: string, senderBusiness?: string): string {
+export function formatOutreachHtml(
+  body: string,
+  senderName: string,
+  senderBusiness?: string,
+  recipientEmail?: string
+): string {
   const cleanSenderName = senderName || 'Muhammad Shoaib';
   const cleanSenderBusiness = senderBusiness || 'Digital Web Strategy & Client Acquisition';
+  const optOutUrl = recipientEmail
+    ? `https://business-outreach-engine.vercel.app/api/outreach/opt-out?email=${encodeURIComponent(recipientEmail)}`
+    : undefined;
 
   const paragraphs = body
     .split('\n\n')
@@ -366,9 +454,10 @@ export function formatOutreachHtml(body: string, senderName: string, senderBusin
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #ffffff; color: #1e293b; margin: 0; padding: 24px 16px;">
   <div style="max-width: 560px; margin: 0 auto; background: #ffffff;">
     ${paragraphs}
-    <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 13px; color: #475569; line-height: 1.5;">
-      <strong style="color: #0f172a; font-size: 14px;">${cleanSenderName}</strong><br/>
+    <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 12px; color: #64748b; line-height: 1.5;">
+      <strong style="color: #0f172a; font-size: 13.5px;">${cleanSenderName}</strong><br/>
       <span style="color: #64748b;">${cleanSenderBusiness}</span>
+      ${optOutUrl ? `<div style="margin-top: 12px; font-size: 11px; color: #94a3b8;">If you prefer not to receive technical briefs, please <a href="${optOutUrl}" style="color: #64748b; text-decoration: underline;">unsubscribe here</a>.</div>` : ''}
     </div>
   </div>
 </body>
@@ -377,7 +466,7 @@ export function formatOutreachHtml(body: string, senderName: string, senderBusin
 
 /**
  * Dispatches an approved outreach pitch to a prospect business
- * Enforces strict idempotency, pre-flight MX check, and duplicate-send prevention
+ * Enforces strict idempotency, pre-flight MX check, suppression lists, and duplicate-send prevention
  */
 export async function sendPitchToProspect(
   lead: BusinessLead,
@@ -386,15 +475,20 @@ export async function sendPitchToProspect(
 ): Promise<{ success: boolean; message: string; provider?: string }> {
   const recipient = lead.email?.trim();
 
-  if (!recipient || isBlockedOrBouncedEmail(recipient)) {
+  if (!recipient || isBlockedOrBouncedEmail(recipient) || (await isSuppressed(recipient))) {
+    await updateLead(lead.id, {
+      status: 'bounced',
+      email_verification_status: 'bounced',
+      notes: `${lead.notes || ''}\n[BLOCKED: Recipient '${recipient || 'empty'}' is in suppression list (bounced or opted-out).]`.trim(),
+    });
     await insertLog(
       'error',
       'warning',
-      `Cannot send outreach: ${lead.business_name} has no verified recipient email address (or address '${recipient || 'empty'}' was rejected/blocked). Blocked to prevent Google bounce notifications.`,
+      `Cannot send outreach: ${lead.business_name} recipient '${recipient || 'empty'}' is suppressed or blocked. Outreach permanently prevented.`,
       { lead_id: lead.id, recipient },
       lead.id
     );
-    return { success: false, message: 'Prospect has no verified email address (or address is blocked).' };
+    return { success: false, message: `Prospect email '${recipient || 'empty'}' is suppressed or blocked.` };
   }
 
   // Idempotency check: Check if already sent
@@ -415,6 +509,12 @@ export async function sendPitchToProspect(
   if (!hasMx) {
     const domain = recipient.split('@')[1] || recipient;
     KNOWN_BOUNCED_OR_BLOCKED_EMAILS.add(recipient.toLowerCase());
+    await addToSuppressionList(recipient, 'hard_bounce', 'no_mx_records', 'NO_MX', `Domain '${domain}' has no active MX records`);
+    await updateLead(lead.id, {
+      status: 'bounced',
+      email_verification_status: 'bounced',
+      notes: `${lead.notes || ''}\n[DISPATCH BLOCKED: Domain '${domain}' has no active MX mail records. Email bounce prevented.]`.trim(),
+    });
     await insertLog(
       'error',
       'warning',
@@ -434,7 +534,7 @@ export async function sendPitchToProspect(
   const settings = await getAutomationSettings();
   const senderName = settings.sender_name || process.env.SENDER_NAME || 'Muhammad Shoaib';
   const senderBusiness = settings.sender_business || process.env.SENDER_BUSINESS || 'Web Development & Client Acquisition';
-  const html = formatOutreachHtml(body, senderName, senderBusiness);
+  const html = formatOutreachHtml(body, senderName, senderBusiness, recipient);
 
   await insertLog(
     'sending',
@@ -461,11 +561,23 @@ export async function sendPitchToProspect(
     idempotency_key: `${lead.id}-${recipient}`,
   });
 
+  const sb = getClient();
+
   if (res.success) {
     await updateLead(lead.id, {
       status: 'accepted_by_provider',
       last_contacted_at: new Date().toISOString(),
     });
+    if (sb) {
+      try {
+        await sb.from('outreach_events').insert({
+          lead_id: lead.id,
+          event_type: 'provider_accepted',
+          channel: 'email',
+          payload: { recipient, provider: res.provider, messageId: res.providerMessageId },
+        });
+      } catch {}
+    }
     await insertLog(
       'success',
       'success',
@@ -474,9 +586,24 @@ export async function sendPitchToProspect(
       lead.id
     );
   } else {
+    const isHardBounce = res.status === 'bounced';
     await updateLead(lead.id, {
-      status: res.status === 'bounced' ? 'bounced' : 'failed',
+      status: isHardBounce ? 'bounced' : 'failed',
+      email_verification_status: isHardBounce ? 'bounced' : undefined,
+      notes: `${lead.notes || ''}\n[${isHardBounce ? 'HARD BOUNCE 550 5.1.1' : 'DELIVERY ERROR'}: ${res.message}]`.trim(),
     });
+
+    if (sb) {
+      try {
+        await sb.from('outreach_events').insert({
+          lead_id: lead.id,
+          event_type: isHardBounce ? 'bounced' : 'failed',
+          channel: 'email',
+          payload: { recipient, error: res.message, category: res.errorCategory },
+        });
+      } catch {}
+    }
+
     await insertLog(
       'error',
       'error',

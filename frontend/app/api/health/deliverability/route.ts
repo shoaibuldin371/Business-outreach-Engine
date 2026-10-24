@@ -3,12 +3,15 @@ import { getSenderDeliverabilityReport, verifyDomainHasMx, KNOWN_BOUNCED_OR_BLOC
 import { getClient, getDashboardStats } from '@/lib/server/supabase';
 import nodemailer from 'nodemailer';
 
+import { getSuppressionList } from '@/lib/server/suppression';
+
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
     const report = await getSenderDeliverabilityReport();
     const stats = await getDashboardStats();
+    const suppressionList = await getSuppressionList(100);
 
     const totalAccepted = stats.accepted_by_provider_count || 0;
     const totalBounced = stats.bounced_count || 0;
@@ -21,15 +24,18 @@ export async function GET() {
       status: 'ok',
       deliverability_report: report,
       metrics: {
+        emails_queued: stats.pending_approval || 0,
         total_accepted: totalAccepted,
         confirmed_delivered: stats.confirmed_delivered_count || 0,
         bounced_count: totalBounced,
+        temporary_failures_count: stats.failed_count || 0,
         calculated_bounce_rate_percentage: calculatedBounceRate,
         bounce_status: calculatedBounceRate > 2.0 ? 'critical_paused' : 'healthy',
         replies_count: stats.replies_count || 0,
         positive_replies_count: stats.positive_replies_count || 0,
         reply_rate_percentage: stats.reply_rate_percentage || 0,
-        suppression_list_size: KNOWN_BOUNCED_OR_BLOCKED_EMAILS.size,
+        suppression_list_size: suppressionList.length,
+        suppression_entries: suppressionList,
       },
       timestamp: new Date().toISOString(),
     });

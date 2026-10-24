@@ -16,11 +16,14 @@ import {
   getRandomWorldwideCategory,
   DiscoveryFilters 
 } from './discovery';
-import { verifyBusinessWebsite } from './verification';
+import { verifyBusinessWebsite, verifyEmailAddress } from './verification';
 import { conductBusinessResearch } from './research';
 import { generatePersonalizedPitch, PitchAngle } from './ai';
 import { sendHitlApprovalEmail, sendPitchToProspect, verifyDomainHasMx } from './email';
-import { BusinessLead, ScoreBreakdown } from './types';
+import { conductDigitalAudit, saveDigitalAudit } from './audit';
+import { generatePersonalizedPage } from './personalized-page';
+import { isSuppressed } from './suppression';
+import { BusinessLead, ScoreBreakdown, EmailVerificationStatus } from './types';
 
 export interface CycleResult {
   status: 'success' | 'paused' | 'locked' | 'error';
@@ -191,27 +194,34 @@ export async function runDiscoveryCycle(
         });
 
         let validContactEmail = '';
-        if (research.public_email && research.public_email.trim()) {
-          const candidateEmail = research.public_email.trim().toLowerCase();
+        let emailVerificationStatus: EmailVerificationStatus = 'missing';
+        const rawEmail = (research.public_email || candidate.email || '').trim().toLowerCase();
+        const emailSourceUrl = research.contact_evidence?.email_source_url || candidate.evidence_url;
+
+        if (rawEmail) {
           const adminEmail = (settings.admin_notification_email || settings.sender_email || 'mshoaibawan371@gmail.com').toLowerCase();
 
-          if (candidateEmail !== adminEmail && !candidateEmail.includes('mshoaibawan371') && !candidateEmail.includes('mshoaibuldin371') && !candidateEmail.includes('shoaib')) {
-            validContactEmail = candidateEmail;
+          if (rawEmail !== adminEmail && !rawEmail.includes('mshoaibawan371') && !rawEmail.includes('mshoaibuldin371') && !rawEmail.includes('shoaib')) {
+            const verification = await verifyEmailAddress(rawEmail, emailSourceUrl);
+            emailVerificationStatus = verification.status as EmailVerificationStatus;
+            if (verification.eligibleForOutreach) {
+              validContactEmail = rawEmail;
+            } else {
+              await insertLog(
+                'explore',
+                'info',
+                `Ineligible recipient '${rawEmail}' for '${name}': ${verification.rejectionReason}. Excluded from email outreach.`,
+                { business: name, email: rawEmail, reason: verification.rejectionReason },
+                undefined,
+                run.id
+              );
+            }
           }
         }
 
         const hasContactEmail = Boolean(validContactEmail);
         if (!hasContactEmail) {
           missingEmailCount++;
-          await insertLog(
-            'explore',
-            'info',
-            `Skipped '${name}': No verified email found (email-only outreach policy).`,
-            { business: name, city: candidate.city },
-            undefined,
-            run.id
-          );
-          continue;
         }
 
         // Explainable Commercial Score Breakdown Calculation
@@ -219,7 +229,7 @@ export async function runDiscoveryCycle(
           : candidate.signal_type === 'evidence_backed' ? 28 
           : candidate.signal_type === 'website_opportunity' ? 22 : 15;
         const servicePts = 25;
-        const emailPts = 20;
+        const emailPts = hasContactEmail ? 20 : 5;
         const evidencePts = candidate.demand_evidence ? 18 : 12;
         const totalScore = candidate.score_breakdown?.total || Math.min(100, signalPts + servicePts + emailPts + evidencePts);
         const explanation = candidate.score_breakdown?.explanation || `${candidate.signal_type === 'explicit_demand' ? 'Explicit public requirement' : 'Documented operational opportunity'} matching technical capabilities; verified domain with valid MX exchange.`;
@@ -232,7 +242,9 @@ export async function runDiscoveryCycle(
           explanation,
         };
 
-        const leadStatus = settings.require_manual_approval ? 'pending_approval' : 'sent';
+        const leadStatus = !hasContactEmail
+          ? 'missing_contact'
+          : (settings.require_manual_approval ? 'pending_approval' : 'sent');
         const token = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
 
         // Step D: Save Master Lead Record to Supabase
@@ -248,8 +260,10 @@ export async function runDiscoveryCycle(
           country: candidate.country || 'United States',
           address: candidate.address,
           phone: research.public_phone || candidate.phone || '',
-          email: validContactEmail,
-          email_verification_status: candidate.email_verification_status || 'syntax_and_mx_verified',
+          email: validContactEmail || undefined,
+          email_source_url: emailSourceUrl,
+          email_discovered_at: validContactEmail ? new Date().toISOString() : undefined,
+          email_verification_status: emailVerificationStatus,
           website: audit.checkedUrl || candidate.website || '',
           website_status: audit.status,
           confidence_score: totalScore,
@@ -266,6 +280,25 @@ export async function runDiscoveryCycle(
         };
 
         const savedLead = await insertLead(leadRecord);
+
+        // Step D.1: Conduct Non-Invasive Digital Audit
+        try {
+          const auditRecord = await conductDigitalAudit(savedLead);
+          await saveDigitalAudit(auditRecord);
+          savedLead.has_audit = true;
+          savedLead.audit_id = auditRecord.id;
+        } catch (auditErr) {
+          console.warn('Digital audit notice:', auditErr);
+        }
+
+        // Step D.2: Generate Client Personalized Portal with Unguessable Token
+        try {
+          const pageRecord = await generatePersonalizedPage(savedLead);
+          savedLead.has_personalized_page = true;
+          savedLead.page_token = pageRecord.token;
+        } catch (pageErr) {
+          console.warn('Personalized page notice:', pageErr);
+        }
 
         // Step E: Save Lead Research Evidence
         await saveLeadResearch({
@@ -325,6 +358,16 @@ export async function runDiscoveryCycle(
                 'success',
                 `🚀 Auto-dispatched personalized outreach pitch to '${name}' (${savedLead.email}). Visible in your Gmail 'Sent' folder!`,
                 { lead_id: savedLead.id, business: name, email: savedLead.email, provider: sendResult.provider },
+                savedLead.id,
+                run.id
+              );
+            } else {
+              // Log failure or bounce
+              await insertLog(
+                'error',
+                sendResult.message.includes('550') || sendResult.message.includes('suppressed') ? 'error' : 'warning',
+                `Outreach not dispatched for '${name}': ${sendResult.message}`,
+                { lead_id: savedLead.id, business: name, email: savedLead.email, error: sendResult.message },
                 savedLead.id,
                 run.id
               );
