@@ -75,7 +75,7 @@ const memStore = {
     sender_business: process.env.SENDER_BUSINESS || 'AI Developer & Automation Architect | Huawei Certified Cloud Developer | LLMs & Python | Data Science Trainer',
     admin_notification_email: process.env.ADMIN_EMAIL || 'Mshoaibawan371@gmail.com',
     require_email_found: true,
-    require_manual_approval: true,
+    require_manual_approval: false, // Fully autonomous 24/7 direct sending without manual approval
     updated_at: new Date().toISOString(),
   } as AutomationSettings,
 };
@@ -989,15 +989,25 @@ export async function saveProviderConnection(
 
 export async function getAutomationSettings(): Promise<AutomationSettings> {
   const sb = getClient();
+  const requireApproval = process.env.REQUIRE_MANUAL_APPROVAL === 'true';
   if (sb) {
     try {
       const { data, error } = await sb.from('automation_settings').select('*').eq('id', 'default').single();
-      if (!error && data) return data as AutomationSettings;
+      if (!error && data) {
+        return {
+          ...memStore.settings,
+          ...data,
+          require_manual_approval: requireApproval,
+        } as AutomationSettings;
+      }
     } catch (e) {
       console.warn('getAutomationSettings exception:', e);
     }
   }
-  return memStore.settings;
+  return {
+    ...memStore.settings,
+    require_manual_approval: requireApproval,
+  };
 }
 
 export async function updateAutomationSettings(updates: Partial<AutomationSettings>): Promise<AutomationSettings> {

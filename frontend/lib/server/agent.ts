@@ -316,7 +316,10 @@ export async function runDiscoveryCycle(
             const sendResult = await sendPitchToProspect(savedLead, 'automated_discovery');
             if (sendResult.success) {
               dispatchedCount++;
-              await updateLead(savedLead.id, { status: 'sent' });
+              await updateLead(savedLead.id, { 
+                status: 'accepted_by_provider', 
+                last_contacted_at: new Date().toISOString() 
+              });
               await insertLog(
                 'success',
                 'success',
