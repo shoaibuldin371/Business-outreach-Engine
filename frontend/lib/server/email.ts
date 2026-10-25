@@ -51,6 +51,10 @@ export const KNOWN_BOUNCED_OR_BLOCKED_EMAILS = new Set([
   'info@unstructured.io',
   'contact@outbackroofing.com',
   'contact@.com',
+  'service@metrodentistsdallas.biz',
+  'contact@elitedentistsdallas.org',
+  'info@apexdentistsdallas.net',
+  'user@domain.com',
 ]);
 
 export function isBlockedOrBouncedEmail(email: string): boolean {
@@ -145,6 +149,32 @@ export async function sendEmail({
       message: `Delivery permanently blocked: '${to}' is on the suppression list (550 Recipient rejected). Blocked to prevent Google Mailer-Daemon bounce notifications.`,
       errorCategory: 'HARD_BOUNCE',
       smtpCode: '550 5.1.1',
+      isHardBounce: true,
+    };
+  }
+
+  // Mandatory Pre-Send DNS & MX Verification Gate:
+  // Verifies that recipient domain actually exists in public DNS and accepts mail.
+  // Stops fake or non-existent domains (e.g. metrodentistsdallas.biz) BEFORE touching Gmail OAuth or SMTP,
+  // preventing Google 'Address not found' Mailer-Daemon bounce emails.
+  const hasMx = await verifyDomainHasMx(normalizedTo);
+  if (!hasMx) {
+    const domain = normalizedTo.split('@')[1] || normalizedTo;
+    KNOWN_BOUNCED_OR_BLOCKED_EMAILS.add(normalizedTo);
+    await addToSuppressionList(
+      normalizedTo,
+      'hard_bounce',
+      'no_mx_records_presend',
+      '550 5.1.2',
+      `Recipient domain '${domain}' does not exist or has no active MX records.`
+    );
+    return {
+      success: false,
+      status: 'bounced',
+      provider: 'none',
+      message: `Delivery permanently blocked: Recipient domain '${domain}' does not exist or has no active MX mail records. Prevented Google 'Address not found' bounce.`,
+      errorCategory: 'HARD_BOUNCE',
+      smtpCode: '550 5.1.2',
       isHardBounce: true,
     };
   }

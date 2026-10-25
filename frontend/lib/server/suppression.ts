@@ -6,6 +6,13 @@ const localSuppressedEmails = new Set<string>([
   'info@unstructured.io',
   'contact@outbackroofing.com',
   'contact@.com',
+  'service@metrodentistsdallas.biz',
+  'contact@elitedentistsdallas.org',
+  'info@apexdentistsdallas.net',
+  'user@domain.com',
+  '@metrodentistsdallas.biz',
+  '@apexdentistsdallas.net',
+  '@elitedentistsdallas.org',
 ]);
 
 /**
@@ -33,6 +40,19 @@ export async function isSuppressed(email: string): Promise<boolean> {
         .limit(1);
 
       if (!error && data && data.length > 0) {
+        localSuppressedEmails.add(cleanEmail);
+        return true;
+      }
+
+      // Check persistent leads table as fallback if suppression_list table is absent
+      const { data: leadData } = await sb
+        .from('leads')
+        .select('id, status')
+        .eq('email', cleanEmail)
+        .in('status', ['bounced', 'suppressed'])
+        .limit(1);
+
+      if (leadData && leadData.length > 0) {
         localSuppressedEmails.add(cleanEmail);
         return true;
       }
@@ -80,15 +100,16 @@ export async function addToSuppressionList(
 
       await sb.from('suppression_list').upsert(entry, { onConflict: 'email' });
 
-      // Update associated leads to keep records safe
+      // Update associated leads in public.leads to prevent any future automated or manual outreach
       const newStatus = reason === 'hard_bounce' ? 'bounced' : 'suppressed';
-      const newVerification = reason === 'hard_bounce' ? 'bounced' : 'suppressed';
+      const suppressNote = `[PERMANENTLY SUPPRESSED: ${smtpErrorCode || reason}] ${diagnosticMessage || ''}`.trim();
 
       await sb
-        .from('business_leads')
+        .from('leads')
         .update({
           status: newStatus,
-          email_verification_status: newVerification,
+          notes: suppressNote,
+          updated_at: new Date().toISOString(),
         })
         .eq('email', cleanEmail);
 
